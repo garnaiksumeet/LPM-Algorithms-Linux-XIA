@@ -8,19 +8,21 @@
 #  Laboratory of Information Processing Science
 #  Helsinki University of Technology
 #  Stefan.Nilsson@hut.fi
+#
+# Edited for LPM Algorithms Tests for Linux-XIA
 
 # The name of our program:
-PROGRAM= trietest
+PROGRAM= lctrie
 
 # These are our C source files:
-SRCS= qsort.c clock.c trie.c trietest.c Good_32bit_Rand.c
+SRCS= qsort.c build_table.c destroy_table.c lookup.c main.c Good_32bit_Rand.c
 
 # The name of the C-compiler we want to use:
 CC= gcc
 
 # The flags (options) that the C-compiler needs:
-CFLAGS = -O4            # optimization
-#CFLAGS = -g -Wall      # debugging, warnings
+#CFLAGS = -O4            # optimization
+CFLAGS = -g	      # debugging, warnings
 #CFLAGS = -a           # tcov, profiling, works only with cc
 #CFLAGS = -xpg          # gprof, works only with cc
 

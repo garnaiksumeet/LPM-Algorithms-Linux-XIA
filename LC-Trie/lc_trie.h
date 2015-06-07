@@ -1,5 +1,5 @@
 /*
-   trie.h
+   lc_trie.h
 
    A routing table for wordsized (32bits) bitstrings implemented as a
    static level- and pathcompressed trie. For details please consult
@@ -20,7 +20,19 @@
    Laboratory of Information Processing Science
    Helsinki University of Technology
    Stefan.Nilsson@hut.fi
+
+   Garnaik Sumeet, Michel Machado 2015
+   Modified for LPM Algorithms Testing in Linux-XIA
 */
+#ifndef _LC_TRIE_H_
+#define _LC_TRIE_H_
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <math.h>
+#include <float.h>
 
 /*
    The trie is represented by an array and each node consists of an
@@ -33,12 +45,16 @@
    are stored separately.
 */
 
-#define ADRSIZE 32        /* the number of bits in an address */
+#define ADRSIZE 32       /* the number of bits in an address */
+
+							// XIDs will be 160 bits
 
 /* A 32-bit word is used to hold the bit patterns of
    the addresses. In IPv6 this should be 128 bits.
    The following typedef is machine dependent.
    A word must be 32 bits long! */
+
+			//We need to have 5 such words to represent each address
 typedef unsigned int word;
 
 /* The trie is represented by an array and each node in
@@ -134,18 +150,10 @@ void disposerouttable(routtable_t t);
 /* Perform a lookup. */
 nexthop_t find(word s, routtable_t t);
 
-/* Print the routing table. (For debugging) */
-void writerouttable(routtable_t t);
-
-/* Print statistics about the routing table */
-void routtablestat(routtable_t t, int verbose);
-
-/* A simple CPU-time clock */
-void clockon();
-void clockoff();
-double gettime();
 
 /* utilities */
 typedef int boolean;
 #define TRUE 1
 #define FALSE 0
+
+#endif // _LC_TRIE_H_
