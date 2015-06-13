@@ -45,7 +45,7 @@
    are stored separately.
 */
 
-#define ADRSIZE 32       /* the number of bits in an address */
+#define ADRSIZE 160       /* the number of bits in an address */
 
 							// XIDs will be 160 bits
 
@@ -56,6 +56,8 @@
 
 			//We need to have 5 such words to represent each address
 typedef unsigned int word;
+
+typedef struct xid { word w[5]; } xid;
 
 /* The trie is represented by an array and each node in
    the trie is compactly represented using only 32 bits:
@@ -79,14 +81,14 @@ typedef word node_t;
 
 /* A next-hop table entry is a 32 bit string */
 
-typedef word nexthop_t;
+typedef xid nexthop_t;
 
 /* The routing table entries are initially stored in
    a simple array */
 
 typedef struct entryrec *entry_t;
 struct entryrec {
-   word data;          /* the routing entry */
+   xid data;          /* the routing entry */
    int len;            /* and its length */
    nexthop_t nexthop;  /* the corresponding next-hop */
    int pre;            /* this auxiliary variable is used in the */
@@ -96,14 +98,14 @@ struct entryrec {
 
 typedef struct baserec *base_t;
 struct baserec {
-   word str;    /* the routing entry */
+   xid str;    /* the routing entry */
    int len;     /* and its length */
    int pre;     /* pointer to prefix table, -1 if no prefix */
    int nexthop; /* pointer to next-hop table */
 };
 
 typedef struct { /* compact version of above */
-   word str;
+   xid str;
    int len;
    int pre;
    int nexthop;
@@ -148,6 +150,8 @@ routtable_t buildrouttable(entry_t s[], int size,
 void disposerouttable(routtable_t t);
 
 /* Perform a lookup. */
+
+// Need to find the exact details of word usage here
 nexthop_t find(word s, routtable_t t);
 
 

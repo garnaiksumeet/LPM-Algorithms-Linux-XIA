@@ -12,11 +12,11 @@
 
       trietest routing_file [n]
 
-   The routing_file is a file describing an IPv4 routing table.
-   Each line of the file contains three numbers bits, len, and next
-   in decimal notation, where bits is the bitpattern and len is
-   the lenght of the entry, and next is the corresponding next-hop
-   address.
+   The routing_file is a file describing an XIDs and corresponding prefix.
+   Each line of the file contains three strings space separated.
+   The first string is the 160-bit XID represented by a 40-bit hex and
+   the second string is the length of prefix in the bit pattern in decimal.
+   The third string is the XID of the next principal.
 
    To be able to measure the search time also for small instances,
    one can give an optional command line parameter n that indicates
@@ -48,30 +48,50 @@
 #include "Good_32bit_Rand.h"
 
 /*
-   Read routing table entries from a file. Each entry is represented
-   by three numbers: bits, len, and next in decimal notation, where
-   bits is the bitpattern and len is the length of the entry, and
-   next is the corresponding next-hop address.
+   Read routing table entries from a space separated file. The file consists of
+   three strings in each line. The first string is a 40-bit string in hex
+   represents an xid entry in the table, the second string is the length of the
+   prefix of the xid entry in the same line. Third string is the next hop xid.
 */
-static int readentries(char *file_name,
-                       entry_t entry[], int maxsize)
+static int readentries(char *file_name, entry_t entry[], int maxsize)
 {
    int nentries = 0;
-   word data, nexthop;
+   xid data, nexthop;
    int len;
    FILE *in_file;
 
-   if (!(in_file = fopen(file_name, "rb"))) {
+   // Auxiliary variables
+   char tmp_data[41] = {0};
+   char tmp_nexthop[41] = {0};
+   char tmp_word[9];
+   char tmp_nextword[9];
+   int loop;
+
+   if (!(in_file = fopen(file_name, "rb")))
+   {
       perror(file_name);
       exit(-1);
    }
 
-   while (fscanf(in_file, "%lu%i%lu", &data, &len, &nexthop) != EOF) {
+   while (fscanf(in_file, "%s%i%s", &tmp_data, &len, &tmp_nexthop) != EOF)
+   {
       if (nentries >= maxsize) return -1;
       entry[nentries] = (entry_t) malloc(sizeof(struct entryrec));
-      /* clear the 32-len last bits, this shouldn't be necessary
-         if the routtable data was consistent */
-      data = data >> (32-len) << (32-len);
+
+      for (loop=0;loop<5;loop++)
+      {
+        memset(tmp_word, 0, 9);
+        memset(tmp_nextword, 0, 9);
+        strncpy(tmp_word, tmp_data+(loop*8), 8);
+        strncpy(tmp_nexword, tmp_nexthop+(loop*8), 8);
+
+      	data.w[4-loop] = (word)strtol(tmp_word, NULL, 16);
+      	nexthop.w[4-loop] = (word)strtol(tmp_nextword, NULL, 16);
+      }
+      // extract the prefix from the bit pattern
+      for (loop=0;loop<(160-len)/32;loop++)
+      	data.w[loop] = 0;
+      data.w[loop] = data.w[loop] >> (32-(len%32)) << (32-(len%32));
       entry[nentries]->data = data;
       entry[nentries]->len = len;
       entry[nentries]->nexthop = nexthop;
@@ -246,7 +266,6 @@ int main(int argc, char *argv[])
       fprintf(stderr, "%s%0d\n", "Repeated: ", repeat);
 
    table = buildrouttable(entry, nentries, 0.50, 16, verbose);
-
 
    fprintf(stderr, "Function search\n");
    run(testdata, ntraffic, repeat, table, FALSE, 8, verbose);
