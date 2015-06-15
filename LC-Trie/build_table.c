@@ -29,14 +29,34 @@
 static int ROOTBRANCH = 16;     // The branching factor at the root
 static double FILLFACT = 0.50;  // The trie fill factor
 
+/*
+   Compare two xids i.e 160-bit addresses and returns 1, 0, -1 
+   id1 > id2 : return 1
+   id1 < id2 : return -1
+   id1 = id2 : return 0
+*/
+static int comparexid(xid *id1, xid *id2)
+{
+	int cmp;
+
+	cmp = memcmp(id1, id2, 20);
+
+	if (cmp > 0)
+		return 1;
+	else if (cmp < 0)
+		return -1;
+	else
+		return 0;
+}
 
 /* Compare two routing table entries. This is used by qsort */
 int pstrcmp(entry_t *i, entry_t *j)
 {
-   if ((*i)->data < (*j)->data)
-      return -1;
-   else if ((*i)->data > (*j)->data)
-      return 1;
+   int tmp = comparexid((*i)->data, (*j)->data);
+   if (-1 == tmp)
+      return tmp;
+   else if (1 == tmp)
+      return tmp;
    else if ((*i)->len < (*j)->len)
       return -1;
    else if ((*i)->len > (*j)->len)
@@ -48,12 +68,7 @@ int pstrcmp(entry_t *i, entry_t *j)
 /* Compare two netxhop addresses. This is used by qsort */
 int pnexthopcmp(nexthop_t *i, nexthop_t *j)
 {
-   if (*i < *j)
-      return -1;
-   else if (*i > *j)
-      return 1;
-   else
-      return 0;
+	return comparexid(i, j);
 }
 
 /*
@@ -206,7 +221,7 @@ void build(base_t base[], pre_t pre[], int prefix, int first, int n,
    }
 }
 
-int binsearch(nexthop_t x, int v[], int n)
+int binsearch(nexthop_t x, nexthop v[], int n)
 {
    int low, high, mid;
 
@@ -214,9 +229,9 @@ int binsearch(nexthop_t x, int v[], int n)
    high = n - 1;
    while (low <= high) {
       mid = (low+high) / 2;
-      if (x < v[mid])
+      if (-1 == comparexid(&x, &v[mid]))
          high = mid - 1;
-      else if (x > v[mid])
+      else if (1 == comparexid(&x, &v[mid]))
          low = mid + 1;
       else
          return mid;
