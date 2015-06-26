@@ -57,7 +57,7 @@
 			//We need to have 5 such words to represent each address
 typedef unsigned int word;
 
-typedef struct xid { word w[5]; } xid;
+typedef struct xid { unsigned char w[20]; } xid;
 
 /* The trie is represented by an array and each node in
    the trie is compactly represented using only 32 bits:
@@ -79,7 +79,7 @@ typedef word node_t;
 /* remove the first p bits from string */
 #define REMOVE(p, str)   ((str)<<(p)>>(p))
 
-/* A next-hop table entry is a 32 bit string */
+/* A next-hop table entry is a 160 bit string */
 
 typedef xid nexthop_t;
 

@@ -47,6 +47,15 @@
 #include "lc_trie.h"
 #include "Good_32bit_Rand.h"
 
+
+unsigned char hextochar(char a, char b)
+{
+	unsigned char hn, ln;
+
+	hn = a > '9' ? a - 'a' + 10 : a - '0';
+	ln = b > '9' ? b - 'a' + 10 : b - '0';
+	return ((hn << 4 ) | ln);
+}
 /*
    Read routing table entries from a space separated file. The file consists of
    three strings in each line. The first string is a 40-bit string in hex
@@ -55,49 +64,45 @@
 */
 static int readentries(char *file_name, entry_t entry[], int maxsize)
 {
-   int nentries = 0;
-   xid data, nexthop;
-   int len;
-   FILE *in_file;
+	int nentries = 0;
+	xid data, nexthop;
+	int len;
+	FILE *in_file;
 
-   // Auxiliary variables
-   char tmp_data[41] = {0};
-   char tmp_nexthop[41] = {0};
-   char tmp_word[9];
-   char tmp_nextword[9];
-   int loop;
+	// Auxiliary variables
+	char tmp_data[41] = {0};
+	char tmp_nexthop[41] = {0};
+	int loop;
 
-   if (!(in_file = fopen(file_name, "rb")))
-   {
-      perror(file_name);
-      exit(-1);
-   }
+	if (!(in_file = fopen(file_name, "rb")))
+	{
+		perror(file_name);
+		exit(-1);
+	}
 
-   while (fscanf(in_file, "%s%i%s", &tmp_data, &len, &tmp_nexthop) != EOF)
-   {
-      if (nentries >= maxsize) return -1;
-      entry[nentries] = (entry_t) malloc(sizeof(struct entryrec));
+	while (fscanf(in_file, "%s%i%s", &tmp_data, &len, &tmp_nexthop) != EOF)
+	{
+		if (nentries >= maxsize) return -1;
+		entry[nentries] = (entry_t) malloc(sizeof(struct entryrec));
 
-      for (loop=0;loop<5;loop++)
-      {
-        memset(tmp_word, 0, 9);
-        memset(tmp_nextword, 0, 9);
-        strncpy(tmp_word, tmp_data+(loop*8), 8);
-        strncpy(tmp_nexword, tmp_nexthop+(loop*8), 8);
+		for (loop=0;loop<20;loop++)
+		{
+			data.w[loop] = hextochar(tmp_data[2*loop], tmp_data[2*loop + 1]);
+			nexthop.w[loop] = hextochar(tmp_nexthop[2*loop], tmp_nexthop[2*loop + 1]);
+		}
+		// extract the prefix from the bit pattern
+		for (loop=0;loop<(len/8);loop++);
+		data.w[loop] = data.w[loop] >> (8 - (len%8)) << (8 - (len%8));
+		loop++;
+		for (;loop<20;loop++)
+			data.w[loop] = (char) 0;
 
-      	data.w[4-loop] = (word)strtol(tmp_word, NULL, 16);
-      	nexthop.w[4-loop] = (word)strtol(tmp_nextword, NULL, 16);
-      }
-      // extract the prefix from the bit pattern
-      for (loop=0;loop<(160-len)/32;loop++)
-      	data.w[loop] = 0;
-      data.w[loop] = data.w[loop] >> (32-(len%32)) << (32-(len%32));
-      entry[nentries]->data = data;
-      entry[nentries]->len = len;
-      entry[nentries]->nexthop = nexthop;
-      nentries++;
-   }
-   return nentries;
+		entry[nentries]->data = data;
+		entry[nentries]->len = len;
+		entry[nentries]->nexthop = nexthop;
+		nentries++;
+	}
+	return nentries;
 }
 
 /*

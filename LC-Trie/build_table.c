@@ -35,16 +35,18 @@ static double FILLFACT = 0.50;  // The trie fill factor
    id1 < id2 : return -1
    id1 = id2 : return 0
 */
-static int comparexid(xid *id1, xid *id2)
+int comparexid(const void *id1, const void *id2)
 {
-	int cmp;
+	int tmpresult;
+	xid **tmp1 = (xid **)id1;
+	xid **tmp2 = (xid **)id2;
 
-	cmp = memcmp(id1, id2, 20);
+	tmpresult = memcmp(*tmp1, *tmp2, 20);
 
-	if (cmp > 0)
-		return 1;
-	else if (cmp < 0)
+	if (tmpresult < 0)
 		return -1;
+	else if (tmpresult > 0)
+		return 1;
 	else
 		return 0;
 }
