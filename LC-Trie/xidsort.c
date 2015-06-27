@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 
-int xidsort(list *base, size_t narray, size_t size, int (*compare)(const void *, const void *))
+void xidsort(list *base, size_t narray, size_t size, int (*compare)(const void *, const void *))
 {
 	qsort(&base[0], narray, size, compare);
 }

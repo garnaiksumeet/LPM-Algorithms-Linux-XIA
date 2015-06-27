@@ -23,7 +23,7 @@
    Modified for LPM Algorithms Testing in Linux-XIA
 */
 #include <stddef.h>
-#include "qsort.h"
+#include "xidsort.h"
 #include "lc_trie.h"
 
 static int ROOTBRANCH = 16;     // The branching factor at the root
@@ -406,4 +406,3 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
 
    return table;
 }
-

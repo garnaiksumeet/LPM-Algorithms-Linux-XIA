@@ -58,6 +58,7 @@
 typedef unsigned int word;
 
 typedef struct xid { unsigned char w[20]; } xid;
+typedef xid *list;
 
 /* The trie is represented by an array and each node in
    the trie is compactly represented using only 32 bits:
