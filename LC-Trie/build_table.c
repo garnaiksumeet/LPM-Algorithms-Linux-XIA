@@ -67,12 +67,6 @@ int pstrcmp(entry_t *i, entry_t *j)
       return 0;
 }
 
-/* Compare two netxhop addresses. This is used by qsort */
-int pnexthopcmp(nexthop_t *i, nexthop_t *j)
-{
-	return comparexid(i, j);
-}
-
 /*
    Compute the branch and skip value for the root of the
    tree that covers the base array from position 'first' to
@@ -252,34 +246,39 @@ int isprefix(entry_t s, entry_t t)
            EXTRACT(0, s->len, t->data));
 }
 
-nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)
+static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)
 {
-   nexthop_t *nexthop, *nexttemp;
-   int count, i;
+	nexthop_t *nexthop, *nexttemp;
+	nexthop_t *pnexttmp[nentries];
+	int count, i;
 
-   /* Extract the nexthop addresses from the entry array */
-   nexttemp = (nexthop_t *) malloc(nentries * sizeof(nexthop_t));
-   for (i = 0; i < nentries; i++)
-      nexttemp[i] = entry[i]->nexthop;
+	/* Extract the nexthop addresses from the entry array */
+	nexttemp = (nexthop_t *) malloc(nentries * sizeof(nexthop_t));
+	for (i=0;i<nentries;i++)
+	{
+		nexttemp[i] = entry[i]->nexthop;
+		pnexttmp[i] = &nexttemp[i];
+	}
 
-   quicksort((char *) nexttemp, nentries,
-             sizeof(nexthop_t), pnexthopcmp);
+	xidsort(pnexttmp, nentries, sizeof(nexthop_t *), comparexid);
 
-   /* Remove duplicates */
-   count = nentries > 0 ? 1 : 0;
-   for (i = 1; i < nentries; i++)
-      if (pnexthopcmp(&nexttemp[i-1], &nexttemp[i]) != 0)
-         nexttemp[count++] = nexttemp[i];
+	/* Remove duplicates */
+	count = nentries > 0 ? 1 : 0;
+	for (i = 1; i < nentries; i++)
+	{
+		if (comparexid(&pnexttmp[i-1], &pnexttmp[i]) != 0)
+			pnexttmp[count++] = pnexttmp[i];
+	}
 
-   /* Move the elements to an array of proper size */
-   nexthop = (nexthop_t *) malloc(count * sizeof(nexthop_t));
-   for (i = 0; i < count; i++) {
-      nexthop[i] = nexttemp[i];
-   }
-   free(nexttemp);
+    /* Move the elements to an array of proper size */
+	nexthop = (nexthop_t *) malloc(count * sizeof(nexthop_t));
+	for (i = 0; i < count; i++)
+		nexthop[i] = *pnexttmp[i];
 
-   *nexthopsize = count;
-   return nexthop;
+	free(nexttemp);
+
+	*nexthopsize = count;
+	return nexthop;
 }
 
 routtable_t buildrouttable(entry_t entry[], int nentries,
@@ -315,7 +314,7 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
       fprintf(stderr, "\nBuilding nexthop table: %.2f\n", gettime());*/
 
    // Start timing measurements
-   quicksort((char *) entry, nentries, sizeof(entry_t), pstrcmp);
+   xidentrysort(entry, nentries, sizeof(entry_t), compareentries);
    /* Remove duplicates */
    size = nentries > 0 ? 1 : 0;
    for (i = 1; i < nentries; i++)
