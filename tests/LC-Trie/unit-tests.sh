@@ -31,10 +31,13 @@
 # 4) test-build-nexthop-table.c
 #    I: xid (space) prefix-length (space) xid
 #    C: xid
-
+#
+# 5) test-entries.c
+#    I: xid (space) prefix-length (space) xid
+#    C: xid (space) prefix-length (space) xid
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
-"test-build-nexthop-table")
+"test-build-nexthop-table" "test-entries")
 
 for i in "${arr[@]}"
 do

@@ -52,19 +52,22 @@ int comparexid(const void *id1, const void *id2)
 }
 
 /* Compare two routing table entries. This is used by qsort */
-int pstrcmp(entry_t *i, entry_t *j)
+int compareentries(const void *id1, const void *id2)
 {
-   int tmp = comparexid((*i)->data, (*j)->data);
-   if (-1 == tmp)
-      return tmp;
-   else if (1 == tmp)
-      return tmp;
-   else if ((*i)->len < (*j)->len)
-      return -1;
-   else if ((*i)->len > (*j)->len)
-      return 1;
-   else
-      return 0;
+	int tmpresult;
+	entry_t *tmp_entry1 = (entry_t *) id1;
+	entry_t *tmp_entry2 = (entry_t *) id2;
+	xid *tmp_id1 = &((*tmp_entry1)->data);
+	xid *tmp_id2 = &((*tmp_entry2)->data);
+
+	tmpresult = comparexid(&tmp_id1, &tmp_id2);
+
+	if (tmpresult < 0)
+		return -1;
+	else if (tmpresult > 0)
+		return 1;
+	else
+		return 0;
 }
 
 /*
@@ -310,23 +313,17 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
    // Start timing measurements
    nexthop = buildnexthoptable(entry, nentries, &nnexthops);
    // End timing measurements
-   /*if (verbose)
-      fprintf(stderr, "\nBuilding nexthop table: %.2f\n", gettime());*/
 
    // Start timing measurements
    xidentrysort(entry, nentries, sizeof(entry_t), compareentries);
    /* Remove duplicates */
    size = nentries > 0 ? 1 : 0;
    for (i = 1; i < nentries; i++)
-      if (pstrcmp(&entry[i-1], &entry[i]) != 0)
-         entry[size++] = entry[i];
+   {
+    	if (compareentries(&addr[i-1], &addr[i]) != 0)
+   			addr[size++] = addr[i];
+   }
    // End timing measurements
-/*   if (verbose) {
-      fprintf(stderr, "Sorting: %.2f", gettime());
-      if (size != nentries)
-         fprintf(stderr, "  (%i unique entries)", size);
-      fprintf(stderr, "\n");
-   }*/
 
    // Start timing measurements
    /* The number of internal nodes in the tree can't be larger
@@ -342,7 +339,9 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
    /* Go through the entries and put the prefixes in p
       and the rest of the strings in b */
    for (i = 0; i < size; i++)
-      if (i < size-1 && isprefix(entry[i], entry[i+1])) {
+   {
+      if (i < size-1 && isprefix(entry[i], entry[i+1]))
+      {
          ptemp = (pre_t) malloc(sizeof(struct prerec));
          ptemp->len = entry[i]->len;
          ptemp->pre =entry[i]->pre;
@@ -351,7 +350,9 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
             entry[j]->pre = nprefs;
          ptemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
          p[nprefs++] = ptemp;
-      } else {
+      }
+      else
+      {
          btemp = (base_t) malloc(sizeof(struct baserec));
          btemp->len = entry[i]->len;
          btemp->str = entry[i]->data;
@@ -359,6 +360,7 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
          btemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
          b[nbases++] = btemp;
       }
+   }
 
    /* Build the trie structure */
    build(b, p, 0, 0, nbases, 0, &nextfree, t);
@@ -400,8 +402,5 @@ routtable_t buildrouttable(entry_t entry[], int nentries,
    table->nexthop = nexthop;
    table->nexthopsize = nnexthops;
    // End timing measurements
-/*   if (verbose)
-      fprintf(stderr, "Building routing table: %.2f\n", gettime());*/
-
    return table;
 }
