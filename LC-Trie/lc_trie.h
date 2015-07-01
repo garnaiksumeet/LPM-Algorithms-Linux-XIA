@@ -142,6 +142,13 @@ struct routtablerec {
    int nexthopsize;
 };
 
+/* Extract operation for xids*/
+xid extract(int pos, int length, xid data);
+
+/* Bitwise shifting operations on xids*/
+xid shift_left(xid id, int shift);
+xid shift_right(xid id, int shift);
+
 /* Build the routing table */
 routtable_t buildrouttable(entry_t s[], int size,
                            double fillfact, int rootbranch,

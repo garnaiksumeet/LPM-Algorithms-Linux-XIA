@@ -182,7 +182,7 @@ void build(base_t base[], pre_t pre[], int prefix, int first, int n,
                   else
                      prep = pre[prep]->pre;
                }
-	    }         
+	    }
 
             /* Compute the longest prefix match for p */
             if (p < first + n) {
@@ -242,11 +242,11 @@ int binsearch(nexthop_t x, nexthop v[], int n)
 
 int isprefix(entry_t s, entry_t t)
 {
+   int length = s->len;
    return s != NULL &&
-          (s->len == 0 ||   /* EXTRACT() can't handle 0 bits */
-           s->len <= t->len &&
-           EXTRACT(0, s->len, s->data) ==
-           EXTRACT(0, s->len, t->data));
+          (length == 0 ||
+           length <= t->len &&
+           strncmp(extract(0, length, s->data), extract(0, length, t->data), length/8 + 1));
 }
 
 static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)

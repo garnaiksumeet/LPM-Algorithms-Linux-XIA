@@ -35,6 +35,18 @@
 # 5) test-entries.c
 #    I: xid (space) prefix-length (space) xid
 #    C: xid (space) prefix-length (space) xid
+#
+# 6) test-bitwise-shift-left.c
+#    I: xid (space) shifts
+#    C: xid
+#
+# 7) test-bitwise-shift-right.c
+#    I: xid (space) shifts
+#    C: xid
+#
+# 8) test-extract.c
+#    I: xid (space) length (space) pos
+#    C: xid
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
 "test-build-nexthop-table" "test-entries")
