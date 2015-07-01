@@ -47,9 +47,15 @@
 # 8) test-extract.c
 #    I: xid (space) length (space) pos
 #    C: xid
+#
+# 9) test-isprefix.c
+#    I: Two route tables i.e two input files same as test-read-lctrie.c of same
+#    number of entries
+#    C: Binary value
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
-"test-build-nexthop-table" "test-entries")
+"test-build-nexthop-table" "test-entries" "test-bitwise-shift-left"
+"test-bitwise-shift-right" "test-extract" "test-isprefix")
 
 for i in "${arr[@]}"
 do

@@ -197,7 +197,7 @@ void build(base_t base[], pre_t pre[], int prefix, int first, int n,
                   else
                      prep = pre[prep]->pre;
                }
-	    }         
+	    }
 
             if ((match1 > match2 && p > first) || p == first + n)
                build(base, pre, newprefix+branch, p-1, 1,
@@ -242,12 +242,22 @@ int binsearch(nexthop_t x, nexthop v[], int n)
 
 int isprefix(entry_t s, entry_t t)
 {
-   int length = s->len;
-   return s != NULL &&
-          (length == 0 ||
-           length <= t->len &&
-           // comparison operation for xids returned
-           );
+	int tmp = 0;
+	int equal = -1;
+	int length;
+	xid s_data, t_data;
+	xid *ps_data = &s_data;
+	xid *pt_data = &t_data;
+
+	if (NULL == s)
+		return tmp;
+
+	length = s->len;
+	s_data = extract(0, length, s->data);
+	t_data = extract(0, length, t->data);
+	equal = comparexid(&ps_data, &pt_data);
+	tmp = ((0 == length) || ((length <= t->len) && (0 == equal)));
+	return tmp;
 }
 
 static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)
