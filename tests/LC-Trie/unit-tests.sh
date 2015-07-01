@@ -52,10 +52,17 @@
 #    I: Two route tables i.e two input files same as test-read-lctrie.c of same
 #    number of entries
 #    C: Binary value
+#
+# 10) test-binsearch.c
+#    I: Two files with first file containing sorted (ascending) xids in each
+#    line and second file serving as xids to be searched in the first file
+#    C: Integers in the range [-1,n-1] 
+#	where n->number of xids in first file
+#	[0,n-1] indicates search is successful and the index -1 for not found
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
 "test-build-nexthop-table" "test-entries" "test-bitwise-shift-left"
-"test-bitwise-shift-right" "test-extract" "test-isprefix")
+"test-bitwise-shift-right" "test-extract" "test-isprefix" "test-binsearch")
 
 for i in "${arr[@]}"
 do

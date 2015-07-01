@@ -220,22 +220,27 @@ void build(base_t base[], pre_t pre[], int prefix, int first, int n,
    }
 }
 
-int binsearch(nexthop_t x, nexthop v[], int n)
+int binsearch(xid data, xid *table, int n)
 {
-   int low, high, mid;
+	int low, mid, high, val;
+	xid *pdata = &data;
+	xid *pmid;
 
-   low = 0;
-   high = n - 1;
-   while (low <= high) {
-      mid = (low+high) / 2;
-      if (-1 == comparexid(&x, &v[mid]))
-         high = mid - 1;
-      else if (1 == comparexid(&x, &v[mid]))
-         low = mid + 1;
-      else
-         return mid;
-   }
-   return -1;
+	low = 0;
+	high = n-1;
+	while (low <= high)
+	{
+		mid = (low + high)/2;
+		pmid = &table[mid];
+		val = comparexid(&pdata, &pmid);
+		if (-1 == val)
+			high = mid - 1;
+		else if (1 == val)
+			low = mid + 1;
+		else
+			return mid;
+	}
+	return -1;
 }
 
 /* Is the string s a prefix of the string t? */
