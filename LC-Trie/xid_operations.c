@@ -63,3 +63,14 @@ static xid shift_right(xid id, int shift)
 	}
 	return tmp;
 }
+
+xid extract(int pos, int length, xid data)
+{
+	int i;
+	xid tmp;
+
+	// length = 0 is handled in the boolean expression and is short-circuit
+	// even though length of zero works in case of xids
+	tmp = shift_right(shift_left(data, pos), (160-length));
+	return tmp;
+}

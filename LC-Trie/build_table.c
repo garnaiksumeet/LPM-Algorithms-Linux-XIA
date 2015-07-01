@@ -246,7 +246,8 @@ int isprefix(entry_t s, entry_t t)
    return s != NULL &&
           (length == 0 ||
            length <= t->len &&
-           strncmp(extract(0, length, s->data), extract(0, length, t->data), length/8 + 1));
+           // comparison operation for xids returned
+           );
 }
 
 static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)
