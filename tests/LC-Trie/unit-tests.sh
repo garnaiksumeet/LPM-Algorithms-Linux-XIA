@@ -59,10 +59,18 @@
 #    C: Integers in the range [-1,n-1] 
 #	where n->number of xids in first file
 #	[0,n-1] indicates search is successful and the index -1 for not found
+#
+# 11) test-build-patricia.c
+#    I: xid (space) length
+#    C: Each node is represented with a level where root is level 0 and the
+#    values of skip and pointer to base vector, where -1 signifies an internal
+#    node.
+
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
 "test-build-nexthop-table" "test-entries" "test-bitwise-shift-left"
-"test-bitwise-shift-right" "test-extract" "test-isprefix" "test-binsearch")
+"test-bitwise-shift-right" "test-extract" "test-isprefix" "test-binsearch"
+"test-build-patricia")
 
 for i in "${arr[@]}"
 do
