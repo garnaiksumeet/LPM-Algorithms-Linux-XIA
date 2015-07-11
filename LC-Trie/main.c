@@ -253,29 +253,14 @@ int main(int argc, char *argv[])
    fprintf(stderr, "%s%s", "Table file: ", argv[1]);
    fprintf(stderr, "  (%0d lines)\n", nentries);
 
-
-   /* use data from routing table as traffic */
-   testdata = (word *) malloc(nentries*sizeof(word));
-   for (i = 0; i < nentries; i++)
-      testdata[i] = entry[i]->data;
-   /* permute the entries */
-   for (i = 0; i < nentries - 1; i++) {
-      j = i + (int) (good_drand()*(nentries - i - 1));
-      temp = testdata[i];
-      testdata[i] = testdata[j];
-      testdata[j] = temp;
-   }
    ntraffic = nentries;
 
    if (repeat > 1)
       fprintf(stderr, "%s%0d\n", "Repeated: ", repeat);
 
-   table = buildrouttable(entry, nentries, 0.50, 16, verbose);
+   table = buildrouttable(entry, nentries);
 
-   fprintf(stderr, "Function search\n");
    run(testdata, ntraffic, repeat, table, FALSE, 8, verbose);
-   fprintf(stderr, "Inline search\n");
-   run(testdata, ntraffic, repeat, table, TRUE, 8, verbose);
    disposerouttable(table);
    /*
    for (i = 1; i <= 20; i++) {

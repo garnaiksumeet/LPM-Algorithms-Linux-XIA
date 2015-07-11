@@ -32,7 +32,7 @@ xid shift_left(xid id, int shift)
 	return tmp;
 }
 
-static xid shift_right(xid id, int shift)
+xid shift_right(xid id, int shift)
 {
 	int byte_s = 0;
 	int bit_s = 0;
@@ -73,4 +73,27 @@ xid extract(int pos, int length, xid data)
 	// even though length of zero works in case of xids
 	tmp = shift_right(shift_left(data, pos), (160-length));
 	return tmp;
+}
+
+xid removexid(int bits, xid data)
+{
+	int i;
+	xid tmp;
+
+	tmp = shift_right(shift_left(data, bits), bits);
+	return tmp;
+}
+
+int incrementxid(xid *pxid)
+{
+	int i = 19;
+	unsigned char tmp_max = (unsigned char) -1;
+
+	while ((tmp_max == pxid->w[i]) && (i > -1))
+	{
+		pxid->w[i] = (unsigned char) 0;
+		i--;
+	}
+	if (-1 != i)
+		pxid->w[i] = pxid->w[i] + 1;
 }

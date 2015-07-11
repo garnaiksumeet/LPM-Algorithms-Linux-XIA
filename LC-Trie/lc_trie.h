@@ -54,22 +54,20 @@
    The following typedef is machine dependent.
    A word must be 32 bits long! */
 
-			//We need to have 5 such words to represent each address
 typedef unsigned int word;
 
 typedef struct xid { unsigned char w[20]; } xid;
 typedef xid *list;
 
-/* The trie is represented by an array and each node in
-   the trie is compactly represented using only 32 bits:
-   5 + 5 + 22 = branch + skip + adr */
+typedef uint64_t word;
 typedef word node_t;
 
 #define NOPRE -1          /* an empty prefix pointer */
+#define NOBASE -1
 
 #define SETBRANCH(branch)   ((branch)<<27)
 #define GETBRANCH(node)     ((node)>>27)
-#define SETSKIP(skip)       ((skip)<<22)
+#define SETSKIP(skip)       ((skip)<<20)
 #define GETSKIP(node)       ((node)>>22 & 037)
 #define SETADR(adr)         (adr)
 #define GETADR(node)        ((node) & 017777777)
@@ -93,7 +91,7 @@ struct entryrec {
    int len;            /* and its length */
    nexthop_t nexthop;  /* the corresponding next-hop */
    int pre;            /* this auxiliary variable is used in the */
-};                     /* construction of the final data structure */
+};                    /* construction of the final data structure */
 
 /* base vector */
 
@@ -142,17 +140,40 @@ struct routtablerec {
    int nexthopsize;
 };
 
+typedef struct node_patric node_patric;
+struct node_patric
+{
+	int skip;
+	node_patric *left;
+	node_patric *right;
+	int base;
+};
+typedef struct node_lc node_lc;
+struct node_lc
+{
+	int skip;
+	node_lc **subtrie;
+	int base;
+	int branch;
+	int addr;
+	int child;
+};
+
 /* Extract operation for xids*/
 xid extract(int pos, int length, xid data);
+
+/* Remove bits from xids*/
+xid removexid(int bits, xid data);
+
+/* Increment xids*/
+int incrementxid(xid *pxid);
 
 /* Bitwise shifting operations on xids*/
 xid shift_left(xid id, int shift);
 xid shift_right(xid id, int shift);
 
 /* Build the routing table */
-routtable_t buildrouttable(entry_t s[], int size,
-                           double fillfact, int rootbranch,
-                           int verbose);
+routtable_t buildrouttable(entry_t entry[], int nentries);
 
 /* Dispose of the routing table */
 void disposerouttable(routtable_t t);

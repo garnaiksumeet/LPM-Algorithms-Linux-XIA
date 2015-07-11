@@ -70,154 +70,240 @@ int compareentries(const void *id1, const void *id2)
 		return 0;
 }
 
-/*
-   Compute the branch and skip value for the root of the
-   tree that covers the base array from position 'first' to
-   'first + n - 1'. Disregard the first 'prefix' characters.
-   We assume that n >= 2 and base[first] != base[first+n-1].
-
-*/
-void computebranch(base_t base[], int prefix, int first, int n,
-                   int *branch, int *newprefix)
+static int skipcompute(base_t base[], int prefix, int first, int n)
 {
-   word low, high;
-   int i, pat, b;
-   boolean patfound;
-   int count;
+	int i,match;
+	xid low,high,*plow,*phigh;
 
-   /* Compute the new prefix */
-   high = REMOVE(prefix, base[first]->str);
-   low = REMOVE(prefix, base[first+n-1]->str);
-   i = prefix;
-   while (EXTRACT(i, 1, low) == EXTRACT(i, 1, high))
-      i++;
-   *newprefix = i;
-
-   /* Always use branching factor 2 for two elements */
-   if (n == 2) {
-      *branch = 1;
-      return;
-   }
-
-   /* Use a large branching factor at the root */
-   if (ROOTBRANCH > 0 && prefix == 0  && first == 0) {
-      *branch = ROOTBRANCH;
-      return;
-   }
-
-   /* Compute the number of bits that can be used for branching.
-      We have at least two branches. Therefore we start the search
-      at 2^b = 4 branches. */
-   b = 1;
-   do {
-      b++;
-      if (n < FILLFACT*(1<<b) ||
-          *newprefix + b > ADRSIZE)
-         break;
-      i = first;
-      pat = 0;
-      count = 0;
-      while (pat < 1<<b) {
-         patfound = FALSE;
-         while (i < first + n &&   
-                pat == EXTRACT(*newprefix, b, base[i]->str)) {
-            i++;
-            patfound = TRUE;
-         }
-         if (patfound)
-            count++;
-         pat++;
-      }
-   } while (count >= FILLFACT*(1<<b));
-   *branch = b - 1;
+	// Compute the skip value for that node
+	low = removexid(prefix, base[first]->str);
+	high = removexid(prefix, base[first+n-1]->str);
+	i = prefix;
+	plow = malloc(sizeof(xid));
+	phigh = malloc(sizeof(xid));
+	*plow = extract(i, 1, low);
+	*phigh = extract(i, 1, high);
+	match = comparexid(&plow, &phigh);
+	while (0 == match)
+	{
+		i++;
+		*plow = extract(i, 1, low);
+		*phigh = extract(i, 1, high);
+		match = comparexid(&plow, &phigh);
+	}
+	return i;
 }
 
-/*
-   Build a tree that covers the base array from position
-   'first' to 'first + n - 1'. Disregard the first 'prefix'
-   characters. 'pos' is the position for the root of this
-   tree and 'nextfree' is the first position in the array
-   that hasn't yet been reserved.
-*/
-
-void build(base_t base[], pre_t pre[], int prefix, int first, int n,
-           int pos, int *nextfree, node_t *tree)
+static int subtriecompute(base_t base[], int prefix, int first, int n)
 {
-   int branch, newprefix;
-   int k, p, adr, bits;
-   word bitpat;
+	xid tmp;
+	int nleft = 0;
+	unsigned char left = (unsigned char) 0;
 
-   if (n == 1)
-      tree[pos] = first; /* branch and skip are 0 */
-   else {
-      computebranch(base, prefix, first, n, &branch, &newprefix);
-      adr = *nextfree;
-      tree[pos] = SETBRANCH(branch) |
-                  SETSKIP(newprefix-prefix) |
-                  SETADR(adr);
-      *nextfree += 1<<branch;
-      p = first;
-      /* Build the subtrees */
-      for (bitpat = 0; bitpat < 1<<branch; bitpat++) {
-         k = 0;         
-         while (p+k < first+n &&
-                EXTRACT(newprefix, branch, base[p+k]->str) == bitpat)
-            k++;
+	// Find the number of prefixes in base that belong to left subtrie
+	tmp = extract(prefix, 1, base[first]->str);
+	while (left == tmp.w[19])
+	{
+		nleft++;
+		tmp = extract(prefix, 1, base[first+nleft]->str);
+	}
+	return nleft;
+}
 
-         if (k == 0) {
-	   /* The leaf should have a pointer either to p-1 or p,
-              whichever has the longest matching prefix */
-            int match1 = 0, match2 = 0;
+static node_patric *buildpatricia(base_t base[], int prefix, int first, int n)
+{
+	int i,newprefix,nleft;
+	node_patric *node;
 
-            /* Compute the longest prefix match for p - 1 */
-            if (p > first) {
-               int prep, len;
-               prep =  base[p-1]->pre;
-               while (prep != NOPRE && match1 == 0) {
-                  len = pre[prep]->len;
-                  if (len > newprefix &&
-                      EXTRACT(newprefix, len - newprefix, base[p-1]->str) ==
-                      EXTRACT(32 - branch, len - newprefix, bitpat))
-                     match1 = len;
-                  else
-                     prep = pre[prep]->pre;
-               }
-	    }
+	// Reached the leaf node
+	if (1 == n)
+	{
+		node = malloc(sizeof(node_patric));
+		node->left = NULL;
+		node->right = NULL;
+		node->skip = base[first]->len - prefix;
+		node->base = first;
+		return node;
+	}
+	newprefix = skipcompute(base, prefix, first, n);
+	node = malloc(sizeof(node_patric));
+	node->skip = newprefix - prefix;
+	node->base = NOBASE;
+	nleft = subtriecompute(base, newprefix, first, n);
+	node->left = buildpatricia(base, newprefix+1, first, nleft);
+	node->right = buildpatricia(base, newprefix+1, first+nleft, n-nleft);
+	return node;
+}
 
-            /* Compute the longest prefix match for p */
-            if (p < first + n) {
-               int prep, len;
-               prep =  base[p]->pre;
-               while (prep != NOPRE && match2 == 0) {
-                  len = pre[prep]->len;
-                  if (len > newprefix &&
-                      EXTRACT(newprefix, len - newprefix, base[p]->str) ==
-                      EXTRACT(32 - branch, len - newprefix, bitpat))
-                     match2 = len;
-                  else
-                     prep = pre[prep]->pre;
-               }
-	    }
+static int branchcompute(node_lc *node)
+{
+	int b1,b2;
+	if (NULL == node->subtrie)
+	{
+		node->branch = 0;
+		return node->branch;
+	}
+	b1 = branchcompute(node->subtrie[0]);
+	b2 = branchcompute(node->subtrie[1]);
+	if ((b1 == b2) || (b1 > b2))
+		node->branch = 1 + b2;
+	else
+		node->branch = 1 + b1;
+	return node->branch;
+}
 
-            if ((match1 > match2 && p > first) || p == first + n)
-               build(base, pre, newprefix+branch, p-1, 1,
-                     adr + bitpat, nextfree, tree);
-            else
-               build(base, pre, newprefix+branch, p, 1,
-                     adr + bitpat, nextfree, tree);
-         } else if (k == 1 && base[p]->len - newprefix < branch) {
-            word i;
-            bits = branch - base[p]->len + newprefix;
-            for (i = bitpat; i < bitpat + (1<<bits); i++)
-               build(base, pre, newprefix+branch, p, 1,
-                     adr + i, nextfree, tree);
-            bitpat += (1<<bits) - 1;
-         } else
-            build(base, pre, newprefix+branch, p, k,
-                  adr + bitpat, nextfree, tree);
-         p += k;
-      }
-   }
+static int countlevels(node_lc *node, int *level, int clevel)
+{
+	unsigned long tmp,i;
+	level[clevel]++;
+
+	if (NULL == node->subtrie)
+		return 0;
+	tmp = 1<<(node->branch);
+	for (i=0;i<tmp;i++)
+		countlevels(node->subtrie[i], level, clevel + 1);
+}
+
+static int addrarray(node_lc *node, int *level, int *fill, int clevel)
+{
+	int tmp,i,sum = 0;
+	node_t k,l;
+
+	for (i=0;i<clevel;i++)
+		sum += level[i];
+	tmp = sum + fill[clevel];
+	fill[clevel]++;
+	node->addr = tmp;
+	if (0 == node->branch)
+	{
+		node->child = node->base;
+		return 0;
+	}
+	l = 1<<(node->branch);
+	for (k=0;k<l;k++)
+		addrarray(node->subtrie[k], level, fill, clevel+1);
+	node->child = (node->subtrie[0])->addr;
+}
+
+static int fillarray(node_t *table, node_lc *node)
+{
+	node_t k,l,tmp = 0;
+
+	tmp = ((node_t) node->branch)<<40 | ((node_t) node->skip)<<32 | (node_t) node->child;
+	printf("%"PRIx64"\n", tmp);
+	table[node->addr] = tmp;
+	if (0 == node->branch)
+		return 0;
+	l = 1<<(node->branch);
+	for (k=0;k<l;k++)
+		fillarray(table, node->subtrie[k]);
+}
+
+static int lltoarray(node_lc *root, node_t *table, int *n)
+{
+	int level[ADRSIZE] = {0};
+	int i, sum = 0;
+
+	countlevels(root, level, 0);
+	for (i=0;i<ADRSIZE;i++)
+	{
+		if (0 == level[i])
+			break;
+		sum += level[i];
+	}
+	int fill[i];
+	memset(fill, 0, sizeof(int)*i);
+	*n = sum;
+	addrarray(root, level, fill, 0);
+	fillarray(table, root);
+	return 0;
+}
+
+static node_lc **compressedaddr(node_lc *node, int level)
+{
+	unsigned long tmp_branch,i;
+	node_lc **tmp;
+	if (1 == level)
+	{
+		tmp = node->subtrie;
+		free(node);
+		return tmp;
+	}
+	node_lc **left, **right;
+	left = compressedaddr(node->subtrie[0], level - 1);
+	right = compressedaddr(node->subtrie[1], level - 1);
+	free(node->subtrie);
+	tmp = malloc((1<<level) * sizeof(node_lc *));
+	tmp_branch = 1<<(level - 1);
+	for (i=0;i<tmp_branch;i++)
+	{
+		tmp[i] = left[i];
+		tmp[i+tmp_branch] = right[i];
+	}
+	free(node);
+	return tmp;
+}
+
+static int compresspattolc(node_lc *node)
+{
+	unsigned long i,tmp;
+
+	if (0 == node->branch)
+		return 0;
+	else if (1 == node->branch)
+	{
+		compresspattolc(node->subtrie[0]);
+		compresspattolc(node->subtrie[1]);
+		return 0;
+	}
+	node_lc **left, **right;
+	left = compressedaddr(node->subtrie[0], node->branch - 1);
+	right = compressedaddr(node->subtrie[1], node->branch - 1);
+	free(node->subtrie);
+	node->subtrie = malloc((1<<node->branch) * sizeof(node_lc *));
+	tmp = 1<<(node->branch - 1);
+	for (i=0;i<tmp;i++)
+	{
+		node->subtrie[i] = left[i];
+		node->subtrie[i+tmp] = right[i];
+	}
+	for (i=0;i<(tmp<<1);i++)
+		compresspattolc(node->subtrie[i]);
+}
+
+static node_lc *pattonewdata(node_patric *node)
+{
+	node_lc *tmp = malloc(sizeof(node_lc));
+	if (NULL == node->left)
+	{
+		tmp->subtrie = NULL;
+		tmp->skip = node->skip;
+		tmp->base = node->base;
+		tmp->branch = -1;
+		tmp->addr = -1;
+		tmp->child = -1;
+		free(node);
+		return tmp;
+	}
+	tmp->subtrie = malloc(2 * sizeof(node_lc *));
+	tmp->subtrie[0] = pattonewdata(node->left);
+	tmp->subtrie[1] = pattonewdata(node->right);
+	tmp->skip = node->skip;
+	tmp->base = node->base;
+	tmp->branch = -1;
+	tmp->addr = -1;
+	tmp->child = -1;
+	free(node);
+	return tmp;
+}
+
+static int pattolc(node_patric *root, node_t *table, int *n)
+{
+	node_lc *newroot;
+	newroot = pattonewdata(root);
+	branchcompute(newroot);
+	compresspattolc(newroot);
+	lltoarray(newroot, table, n);
 }
 
 int binsearch(xid data, xid *table, int n)
@@ -300,123 +386,119 @@ static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthops
 	return nexthop;
 }
 
-routtable_t buildrouttable(entry_t entry[], int nentries,
-                           double fillfact, int rootbranch,
-                           int verbose)
+routtable_t buildrouttable(entry_t entry[], int nentries)
 {
-   nexthop_t *nexthop; /* Nexthop table */
-   int nnexthops;
+	nexthop_t *nexthop; /* Nexthop table */
+	int nnexthops;
+	int size;           /* Size after dublicate removal */
+	
+	node_t *t;          /* We first build a big data structure... */
+	base_t *b, btemp;
+	pre_t *p, ptemp;
 
-   int size;           /* Size after dublicate removal */
+	node_t *trie;       /* ...and then we store it efficiently */
+	comp_base_t *base;
+	comp_pre_t *pre;
+	
+	routtable_t table;  /* The complete data structure */
+	
+	/* Auxiliary variables */
+	int i, j, nprefs = 0, nbases = 0;
+	
+	// Start timing measurements
+	nexthop = buildnexthoptable(entry, nentries, &nnexthops);
+	// End timing measurements
 
-   node_t *t;          /* We first build a big data structure... */
-   base_t *b, btemp;
-   pre_t *p, ptemp;
+	// Start timing measurements
+	xidentrysort(entry, nentries, sizeof(entry_t), compareentries);
+	/* Remove duplicates */
+	size = nentries > 0 ? 1 : 0;
+	for (i = 1; i < nentries; i++)
+	{
+		if (compareentries(&addr[i-1], &addr[i]) != 0)
+			addr[size++] = addr[i];
+	}
+	// End timing measurements
 
-   node_t *trie;       /* ...and then we store it efficiently */
-   comp_base_t *base;
-   comp_pre_t *pre;
+	// Start timing measurements
+	/* The number of internal nodes in the tree can't be larger
+	than the number of entries. */
+	b = (base_t *) malloc(size * sizeof(base_t));
+	p = (pre_t *) malloc(size * sizeof(pre_t));
 
-   routtable_t table;  /* The complete data structure */
+	/* Initialize pre-pointers */
+	for (i = 0; i < size; i++)
+		entry[i]->pre = NOPRE;
 
-   /* Auxiliary variables */
-   int i, j, nprefs = 0, nbases = 0;
-   int nextfree = 1;
+	/* Go through the entries and put the prefixes in p
+	and the rest of the strings in b */
+	for (i = 0; i < size; i++)
+	{
+		if (i < size-1 && isprefix(entry[i], entry[i+1]))
+		{
+			ptemp = (pre_t) malloc(sizeof(struct prerec));
+			ptemp->len = entry[i]->len;
+			ptemp->pre = entry[i]->pre;
+			/* Update 'pre' for all entries that have this prefix */
+			for (j = i + 1; j < size && isprefix(entry[i], entry[j]); j++)
+				entry[j]->pre = nprefs;
+			ptemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
+			p[nprefs++] = ptemp;
+		}
+		else
+		{
+			btemp = (base_t) malloc(sizeof(struct baserec));
+			btemp->len = entry[i]->len;
+			btemp->str = entry[i]->data;
+			btemp->pre = entry[i]->pre;
+			btemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
+			b[nbases++] = btemp;
+		}
+	}
 
-   FILLFACT = fillfact;
-   ROOTBRANCH = rootbranch;
+	node_patric *root;
+	root = buildpatricia(b, 0, 0, nbases);
+	node_t *lctable = malloc(sizeof(node_t) * (2*nbases - 1));
+	int nnode_lc;
+	pattolc(root, lctable, &nnode_lc);
 
-   // Start timing measurements
-   nexthop = buildnexthoptable(entry, nentries, &nnexthops);
-   // End timing measurements
-
-   // Start timing measurements
-   xidentrysort(entry, nentries, sizeof(entry_t), compareentries);
-   /* Remove duplicates */
-   size = nentries > 0 ? 1 : 0;
-   for (i = 1; i < nentries; i++)
-   {
-    	if (compareentries(&addr[i-1], &addr[i]) != 0)
-   			addr[size++] = addr[i];
-   }
-   // End timing measurements
-
-   // Start timing measurements
-   /* The number of internal nodes in the tree can't be larger
-      than the number of entries. */
-   t = (node_t *) malloc((2 * size + 2000000) * sizeof(node_t));
-   b = (base_t *) malloc(size * sizeof(base_t));
-   p = (pre_t *) malloc(size * sizeof(pre_t));
-
-   /* Initialize pre-pointers */
-   for (i = 0; i < size; i++)
-      entry[i]->pre = NOPRE;
-
-   /* Go through the entries and put the prefixes in p
-      and the rest of the strings in b */
-   for (i = 0; i < size; i++)
-   {
-      if (i < size-1 && isprefix(entry[i], entry[i+1]))
-      {
-         ptemp = (pre_t) malloc(sizeof(struct prerec));
-         ptemp->len = entry[i]->len;
-         ptemp->pre =entry[i]->pre;
-         /* Update 'pre' for all entries that have this prefix */
-         for (j = i + 1; j < size && isprefix(entry[i], entry[j]); j++)
-            entry[j]->pre = nprefs;
-         ptemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
-         p[nprefs++] = ptemp;
-      }
-      else
-      {
-         btemp = (base_t) malloc(sizeof(struct baserec));
-         btemp->len = entry[i]->len;
-         btemp->str = entry[i]->data;
-         btemp->pre = entry[i]->pre;
-         btemp->nexthop = binsearch(entry[i]->nexthop, nexthop, nnexthops);
-         b[nbases++] = btemp;
-      }
-   }
-
-   /* Build the trie structure */
-   build(b, p, 0, 0, nbases, 0, &nextfree, t);
-
-   /* At this point we now how much memory to allocate */
-   trie = (node_t *) malloc(nextfree * sizeof(node_t));
-   base = (comp_base_t *) malloc(nbases * sizeof(comp_base_t));
-   pre = (comp_pre_t *) malloc(nprefs * sizeof(comp_pre_t));
-
-   for (i = 0; i < nextfree; i++) {
-      trie[i] = t[i];
-   }
-   free(t);
-
-   for (i = 0; i < nbases; i++) {
-      base[i].str = b[i]->str;
-      base[i].len = b[i]->len;
-      base[i].pre = b[i]->pre;
-      base[i].nexthop = b[i]->nexthop;
-      free(b[i]);
-   }
-   free(b);
-
-   for (i = 0; i < nprefs; i++) {
-      pre[i].len = p[i]->len;
-      pre[i].pre = p[i]->pre;
-      pre[i].nexthop = p[i]->nexthop;
-      free(p[i]);
-   }
-   free(p);
-
-   table = (routtable_t) malloc(sizeof(struct routtablerec));
-   table->trie = trie;
-   table->triesize = nextfree;
-   table->base = base;
-   table->basesize = nbases;
-   table->pre = pre;
-   table->presize = nprefs;
-   table->nexthop = nexthop;
-   table->nexthopsize = nnexthops;
-   // End timing measurements
-   return table;
+	/* At this point we now how much memory to allocate */
+	trie = malloc(nnode_lc * sizeof(node_t));
+	base = malloc(nbases * sizeof(comp_base_t));
+	pre = malloc(nprefs * sizeof(comp_pre_t));
+	
+	for (i = 0; i < nnode_lc; i++)
+		trie[i] = lctable[i];
+	free(lctable);
+	
+	for (i = 0; i < nbases; i++)
+	{
+		base[i].str = b[i]->str;
+		base[i].len = b[i]->len;
+		base[i].pre = b[i]->pre;
+		base[i].nexthop = b[i]->nexthop;
+		free(b[i]);
+	}
+	free(b);
+	
+	for (i = 0; i < nprefs; i++)
+	{
+		pre[i].len = p[i]->len;
+		pre[i].pre = p[i]->pre;
+		pre[i].nexthop = p[i]->nexthop;
+		free(p[i]);
+	}
+	free(p);
+	
+	table = (routtable_t) malloc(sizeof(struct routtablerec));
+	table->trie = trie;
+	table->triesize = nnode_lc;
+	table->base = base;
+	table->basesize = nbases;
+	table->pre = pre;
+	table->presize = nprefs;
+	table->nexthop = nexthop;
+	table->nexthopsize = nnexthops;
+	// End timing measurements
+	return table;
 }
