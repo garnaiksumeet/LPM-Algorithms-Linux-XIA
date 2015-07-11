@@ -47,15 +47,6 @@
 
 #define ADRSIZE 160       /* the number of bits in an address */
 
-							// XIDs will be 160 bits
-
-/* A 32-bit word is used to hold the bit patterns of
-   the addresses. In IPv6 this should be 128 bits.
-   The following typedef is machine dependent.
-   A word must be 32 bits long! */
-
-typedef unsigned int word;
-
 typedef struct xid { unsigned char w[20]; } xid;
 typedef xid *list;
 
