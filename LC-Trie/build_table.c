@@ -165,7 +165,6 @@ static int fillarray(node_t *table, node_lc *node)
 	node_t k,l,tmp = 0;
 
 	tmp = ((node_t) node->branch)<<40 | ((node_t) node->skip)<<32 | (node_t) node->child;
-	printf("%"PRIx64"\n", tmp);
 	table[node->addr] = tmp;
 	if (0 == node->branch)
 		return 0;
@@ -390,8 +389,8 @@ routtable_t buildrouttable(entry_t entry[], int nentries)
 	size = nentries > 0 ? 1 : 0;
 	for (i = 1; i < nentries; i++)
 	{
-		if (compareentries(&addr[i-1], &addr[i]) != 0)
-			addr[size++] = addr[i];
+		if (compareentries(&entry[i-1], &entry[i]) != 0)
+			entry[size++] = entry[i];
 	}
 	// End timing measurements
 

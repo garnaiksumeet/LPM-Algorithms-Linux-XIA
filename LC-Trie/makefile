@@ -15,7 +15,7 @@
 PROGRAM= lctrie
 
 # These are our C source files:
-SRCS= qsort.c build_table.c destroy_table.c lookup.c main.c Good_32bit_Rand.c
+SRCS= xidsort.c build_table.c destroy_table.c lookup.c main.c xid_operations.c
 
 # The name of the C-compiler we want to use:
 CC= gcc

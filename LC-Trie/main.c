@@ -45,7 +45,6 @@
 */
 
 #include "lc_trie.h"
-#include "Good_32bit_Rand.h"
 
 
 unsigned char hextochar(char a, char b)
@@ -105,162 +104,53 @@ static int readentries(char *file_name, entry_t entry[], int maxsize)
 	return nentries;
 }
 
-/*
-   Search for the entries in 'testdata[]' in the table
-   'table' 'repeat' times. The experiment is repeated 'n'
-   times and statistics are computed.
-*/
-void run(word testdata[], int entries, int repeat,
-         routtable_t table, int useInline, int n, int verbose)
+void run(routtable_t table, int repeat)
 {
-   double time[100];  /* Repeat the experiment at most 100 times */
-   double min, x_sum, x2_sum, aver, stdev;
-   int i, j, k;
-
-   volatile word res; /* The result of a search is stored in a */
+	int i;
+	volatile xid res; /* The result of a search is stored in a */
                       /* volative variable to avoid optimization */
-
-   /* Used by the inlined search code */
-   node_t node;
-   int pos, branch, adr;
-   word bitmask;
-   int preadr;
-   word s;
-
-   /* Used to record search pattern */
-   /* static int searchDist[MAXENTRIES]; */
-
-   if (!useInline) {
-      for (i = 0; i < n; ++i) {
-         // Start timing measurements
-         for (j = 0; j < repeat; ++j)
-            for (k = 0; k < entries; k++)
-               res = find(testdata[k], table);
-         // End timing measurements
-         // time[i] = gettime(); Appropriate function for timing
-      }
-   } else {
-      for (i = 0; i < n; ++i) {
-         // Start timing measurements
-         for (j = 0; j < repeat; ++j)
-            for (k = 0; k < entries; k++) {
-               /********** Inline search **********/
-               s = testdata[k];
-               node = table->trie[0];
-               pos = GETSKIP(node);
-               branch = GETBRANCH(node);
-               adr = GETADR(node);
-               while (branch != 0) {
-                  node = table->trie[adr + EXTRACT(pos, branch, s)];
-                  pos += branch + GETSKIP(node);
-                  branch = GETBRANCH(node);
-                  adr = GETADR(node);
-               }
-               /* searchDist[adr]++; */
-               /* was this a hit? */
-               bitmask = table->base[adr].str ^ s;
-               if (EXTRACT(0, table->base[adr].len, bitmask) == 0) {
-                  res = table->nexthop[table->base[adr].nexthop];
-                  goto end;
-               }
-               /* if not look in the prefix tree */
-               preadr = table->base[adr].pre;
-               while (preadr != NOPRE) {
-                  if (EXTRACT(0, table->pre[preadr].len, bitmask) == 0) {
-                     res = table->nexthop[table->pre[preadr].nexthop];
-                     goto end;
-                  }
-                  preadr = table->pre[preadr].pre;
-               }	
-               res = 0; /* not found */
-               end: continue;
-               /********* End inline search ********/
-            }
-         // End timing measurements
-         // time[i] = gettime(); Appropriate function for timing
-      }
-   }
-
-   x_sum = x2_sum = 0;
-   min = DBL_MAX;
-   for (i = 0; i < n; ++i) {
-      x_sum += time[i];
-      x2_sum += time[i]*time[i];
-      min = time[i] < min ? time[i] : min;
-   }
-   if (n > 1) {
-      aver = x_sum / (double) n;
-      stdev = sqrt (fabs(x2_sum - n*aver*aver) / (double) (n - 1));
-      fprintf(stderr, "  min:%5.2f", min);
-      fprintf(stderr, "  aver:%5.2f", aver);
-      fprintf(stderr, "  stdev:%5.2f", stdev);
-   }
-   if (verbose) {
-      fprintf(stderr, "  (");
-      for (i = 0; i < n-1; ++i)
-         fprintf(stderr, "%.2f,", time[i]);
-      fprintf(stderr, "%.2f)", time[i]);
-   }
-   fprintf(stderr, "\n");
-   fprintf(stderr, "  %.0f lookups/sec", repeat*entries/min);
-   if (verbose)
-      fprintf(stderr, " (%.2f sec, %i lookups)", min, repeat*entries);
-   fprintf(stderr, "\n");
-
-   /* Print information about the search distribution */
-   /*
-   fprintf(stdout, "Search distribution:\n");
-   for (i = 0; i < table->basesize; i++) {
-      fprintf(stdout, "%7d", searchDist[i]);
-      if (i % 11 == 10)
-         fprintf(stdout, "\n");
-   }
-   */
 }
 
 int main(int argc, char *argv[])
 {
-   #define MAXENTRIES 50000            /* An array of table entries */
-   static entry_t entry[MAXENTRIES];
-   int nentries;
+	#define MAXENTRIES 50000            /* An array of table entries */
+	static entry_t entry[MAXENTRIES];
+	int nentries;
 
-   routtable_t table; /* The routing table */
+	routtable_t table; /* The routing table */
 
-   word *testdata;    /* It is generated from the rout table */
-   int ntraffic;
+	word *testdata;    /* It is generated from the rout table */
+	int ntraffic;
 
-   int repeat;        /* Number of times to repeat the experiment */
-   int verbose = TRUE;
+	int repeat;        /* Number of times to repeat the experiment */
+	int verbose = TRUE;
 
-   int i, j;          /* Auxiliary variables */
-   word temp;
+	int i, j;          /* Auxiliary variables */
 
-   if (argc < 2 || argc > 3) {
-      fprintf(stderr, "%s%s%s\n", "Usage: ", argv[0],
-              " routing_file [n]");
-      return 1;
-   } else if (argc == 3) {
-      repeat = atoi(argv[2]);
-   } else if (argc == 2) {
-         repeat = 1;
-   }
+	if (argc < 2 || argc > 3)
+	{
+		fprintf(stderr, "%s%s%s\n", "Usage: ", argv[0], " routing_file [n]");
+		return 1;
+	}
+	else if (argc == 3)
+		repeat = atoi(argv[2]);
+	else if (argc == 2)
+		repeat = 1;
 
-   if ((nentries = readentries(argv[1], entry, MAXENTRIES)) < 0) {
-      fprintf(stderr, "Input file too large.\n");
-      return 1;
-   }
+	if ((nentries = readentries(argv[1], entry, MAXENTRIES)) < 0)
+	{
+		fprintf(stderr, "Input file too large.\n");
+		return 1;
+	}
 
-   fprintf(stderr, "%s%s", "Table file: ", argv[1]);
-   fprintf(stderr, "  (%0d lines)\n", nentries);
+	fprintf(stderr, "%s%s", "Table file: ", argv[1]);
+	fprintf(stderr, "  (%0d lines)\n", nentries);
 
-   ntraffic = nentries;
+	if (repeat > 1)
+		fprintf(stderr, "%s%0d\n", "Repeated: ", repeat);
 
-   if (repeat > 1)
-      fprintf(stderr, "%s%0d\n", "Repeated: ", repeat);
-
-   table = buildrouttable(entry, nentries);
-
-   run(testdata, ntraffic, repeat, table, FALSE, 8, verbose);
-   disposerouttable(table);
-   return 0;
+	table = buildrouttable(entry, nentries);
+	run(table, repeat);
+	disposerouttable(table);
+	return 0;
 }
