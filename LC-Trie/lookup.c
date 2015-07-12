@@ -26,54 +26,59 @@
 
 
 /* Return a nexthop or 0 if not found */
-nexthop_t find(word s, routtable_t t)
+nexthop_t find(xid s, routtable_t t)
 {
-   node_t node;
-   int pos, branch, adr;
-   word bitmask;
-   int preadr;
+	int i,val;
+	node_t node;
+	unsigned char pos, branch;
+	uint32_t adr, next_jump;
+	xid *bitmask = malloc(sizeof(xid));
+	xid *tmp = malloc(sizeof(xid));
+	xid tmp_node;
+	int preadr;
 
-   /* Traverse the trie */
-   node = t->trie[0];
-   pos = GETSKIP(node);
-   branch = GETBRANCH(node);
-   adr = GETADR(node);
-   while (branch != 0) {
-      node = t->trie[adr + EXTRACT(pos, branch, s)];
-      pos += branch + GETSKIP(node);
-      branch = GETBRANCH(node);
-      adr = GETADR(node);
-   }
+	/* Traverse the trie */
+	node = t->trie[0];
+	pos = (unsigned char) GETSKIP(node);
+	branch = (unsigned char) GETBRANCH(node);
+	adr = (uint32_t) GETADR(node);
+	while (branch != 0)
+	{
+		tmp_node = extract(pos, branch, s);
+		next_jump = xidtounsigned(&tmp_node);
+		node = t->trie[adr + next_jump];
+		pos += branch + GETSKIP(node);
+		branch = (unsigned char) GETBRANCH(node);
+		adr = (unsigned char) GETADR(node);
+	}
 
-   /* Was this a hit? */
-   bitmask = t->base[adr].str ^ s;
-   if (EXTRACT(0, t->base[adr].len, bitmask) == 0)
-      return t->nexthop[t->base[adr].nexthop];
+	/* Was this a hit? */
+	for (i=0;i<20;i++)
+		bitmask->w[i] = (t->base[adr].str).w[i] ^ s.w[i];
+	*bitmask = extract(0, t->base[adr].len, *bitmask);
+	memset(tmp, 0, 20);
+	val = comparexid(&bitmask, &tmp);
+	if (0 == val)
+	{
+		free(bitmask);
+		free(tmp);
+		return t->nexthop[t->base[adr].nexthop];
+	}
 
-   /* If not, look in the prefix tree */
-   preadr = t->base[adr].pre;
-   while (preadr != NOPRE) {
-      if (EXTRACT(0, t->pre[preadr].len, bitmask) == 0)
-         return t->nexthop[t->pre[preadr].nexthop];
-      preadr = t->pre[preadr].pre;
-   }
+	/* If not, look in the prefix tree */
+	preadr = t->base[adr].pre;
+	while (preadr != NOPRE)
+	{
+		*bitmask = extract(0, t->pre[preadr].len, *bitmask);
+		val = comparexid(&bitmask, &tmp);
+		if (0 == val)
+		{
+			free(bitmask);
+			free(tmp);
+			return t->nexthop[t->pre[preadr].nexthop];
+		}
+		preadr = t->pre[preadr].pre;
+	}
 
-   /* Debugging printout for failed search */
-   /*
-   printf("base: ");
-   for (j = 0; j < 32; j++) {
-      printf("%1d", t->base[adr].str<<j>>31);
-      if (j%8 == 7) printf(" ");
-   }
-   printf("  (%lu)  (%i)\n", t->base[adr].str, t->base[adr].len);
-   printf("sear: ");
-   for (j = 0; j < 32; j++) {
-      printf("%1d", s<<j>>31);
-      if (j%8 == 7) printf(" ");
-   }
-   printf("\n");
-   printf("adr: %lu\n", adr);
-   */
-
-   return 0; /* Not found */
+	return *tmp; /* Not found */
 }

@@ -97,3 +97,32 @@ int incrementxid(xid *pxid)
 	if (-1 != i)
 		pxid->w[i] = pxid->w[i] + 1;
 }
+
+/*
+   Compare two xids i.e 160-bit addresses and returns 1, 0, -1 
+   id1 > id2 : return 1
+   id1 < id2 : return -1
+   id1 = id2 : return 0
+*/
+int comparexid(const void *id1, const void *id2)
+{
+	int tmpresult;
+	xid **tmp1 = (xid **)id1;
+	xid **tmp2 = (xid **)id2;
+
+	tmpresult = memcmp(*tmp1, *tmp2, 20);
+
+	if (tmpresult < 0)
+		return -1;
+	else if (tmpresult > 0)
+		return 1;
+	else
+		return 0;
+}
+
+uint32_t xidtounsigned(xid *bitpat)
+{
+	uint32_t tmp = bitpat->w[16]<<24 | bitpat->w[17]<<16 |
+				bitpat->w[18]<<8 | bitpat->w[19];
+	return tmp;
+}

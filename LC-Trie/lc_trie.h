@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <float.h>
+#include <stdint.h>
 
 /*
    The trie is represented by an array and each node consists of an
@@ -56,18 +57,9 @@ typedef word node_t;
 #define NOPRE -1          /* an empty prefix pointer */
 #define NOBASE -1
 
-#define SETBRANCH(branch)   ((branch)<<27)
-#define GETBRANCH(node)     ((node)>>27)
-#define SETSKIP(skip)       ((skip)<<20)
-#define GETSKIP(node)       ((node)>>22 & 037)
-#define SETADR(adr)         (adr)
-#define GETADR(node)        ((node) & 017777777)
-
-/* extract n bits from str starting at position p */
-#define EXTRACT(p, n, str) ((str)<<(p)>>(32-(n)))
-
-/* remove the first p bits from string */
-#define REMOVE(p, str)   ((str)<<(p)>>(p))
+#define GETBRANCH(node)		((node)<<16>>56)
+#define GETSKIP(node)		((node)<<24>>56)
+#define GETADR(node)		((node)<<32>>32)
 
 /* A next-hop table entry is a 160 bit string */
 
@@ -114,7 +106,7 @@ typedef struct { /* compact version of above */
    int len;
    int pre;
    int nexthop;
-} comp_pre_t; 
+} comp_pre_t;
 
 /* The complete routing table data structure consists of
    a trie, a base vector, a prefix vector, and a next-hop table. */
@@ -169,9 +161,11 @@ routtable_t buildrouttable(entry_t entry[], int nentries);
 /* Dispose of the routing table */
 void disposerouttable(routtable_t t);
 
-/* Perform a lookup. */
+uint32_t xidtounsigned(xid *bitpat);
 
-// Need to find the exact details of word usage here
+int comparexid(const void *id1, const void *id2);
+
+/* Perform a lookup. */
 nexthop_t find(word s, routtable_t t);
 
 

@@ -26,31 +26,6 @@
 #include "xidsort.h"
 #include "lc_trie.h"
 
-static int ROOTBRANCH = 16;     // The branching factor at the root
-static double FILLFACT = 0.50;  // The trie fill factor
-
-/*
-   Compare two xids i.e 160-bit addresses and returns 1, 0, -1 
-   id1 > id2 : return 1
-   id1 < id2 : return -1
-   id1 = id2 : return 0
-*/
-int comparexid(const void *id1, const void *id2)
-{
-	int tmpresult;
-	xid **tmp1 = (xid **)id1;
-	xid **tmp2 = (xid **)id2;
-
-	tmpresult = memcmp(*tmp1, *tmp2, 20);
-
-	if (tmpresult < 0)
-		return -1;
-	else if (tmpresult > 0)
-		return 1;
-	else
-		return 0;
-}
-
 /* Compare two routing table entries. This is used by qsort */
 int compareentries(const void *id1, const void *id2)
 {

@@ -262,13 +262,5 @@ int main(int argc, char *argv[])
 
    run(testdata, ntraffic, repeat, table, FALSE, 8, verbose);
    disposerouttable(table);
-   /*
-   for (i = 1; i <= 20; i++) {
-      disposerouttable(table);
-      table = buildrouttable(entry, nentries, 0.05*i, 0, FALSE);
-      routtablestat(table, FALSE);
-      run(testdata, ntraffic, repeat, table, TRUE, 8, FALSE);
-   }
-   */
    return 0;
 }
