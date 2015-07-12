@@ -26,7 +26,7 @@
 #include "xidsort.h"
 #include "lc_trie.h"
 
-/* Compare two routing table entries. This is used by qsort */
+/* Compare two routing table entries. */
 int compareentries(const void *id1, const void *id2)
 {
 	int tmpresult;
@@ -45,6 +45,11 @@ int compareentries(const void *id1, const void *id2)
 		return 0;
 }
 
+/*	Compute the number of bits to be skipped for a range of XID addresses.
+
+	base: base vector
+	prefix: prefix common to the XIDs starting at position first and having
+	total n such XIDs */
 static int skipcompute(base_t base[], int prefix, int first, int n)
 {
 	int i,match;
@@ -69,6 +74,12 @@ static int skipcompute(base_t base[], int prefix, int first, int n)
 	return i;
 }
 
+/*	Computes the total number of base XIDs for a given prefix
+
+	base: base vector
+	prefix: number of bits that are common to the callee node
+	first: starting address of the base for callee node
+	n: number of addresses of the base for the callee node */
 static int subtriecompute(base_t base[], int prefix, int first, int n)
 {
 	xid tmp;
@@ -85,6 +96,14 @@ static int subtriecompute(base_t base[], int prefix, int first, int n)
 	return nleft;
 }
 
+/*	This routine builds the Patricia trie recursively for all nodes in the range
+	of address "first" to "first + n -1" in base vector: base passed as arg
+
+	base: base vector
+	prefix: number of bits that are common to all the XIDs in the range
+	"first" to "first + n - 1"
+	first: first index of base vector
+	n: number of prefixes in base vector starting at index first */
 static node_patric *buildpatricia(base_t base[], int prefix, int first, int n)
 {
 	int i,newprefix,nleft;
@@ -100,6 +119,9 @@ static node_patric *buildpatricia(base_t base[], int prefix, int first, int n)
 		node->base = first;
 		return node;
 	}
+
+	//Find the number of bits to be skipped for the new node being constructed
+	//and range of XIDs for each of its child
 	newprefix = skipcompute(base, prefix, first, n);
 	node = malloc(sizeof(node_patric));
 	node->skip = newprefix - prefix;
@@ -110,9 +132,16 @@ static node_patric *buildpatricia(base_t base[], int prefix, int first, int n)
 	return node;
 }
 
+/*	Compute the branching factor of each node i.e number of complete levels
+	below "node"
+	
+	node: a node in a Patricia Trie (in level compression supporting data
+	structure) */
 static int branchcompute(node_lc *node)
 {
 	int b1,b2;
+
+	//If leaf node
 	if (NULL == node->subtrie)
 	{
 		node->branch = 0;
@@ -120,6 +149,9 @@ static int branchcompute(node_lc *node)
 	}
 	b1 = branchcompute(node->subtrie[0]);
 	b2 = branchcompute(node->subtrie[1]);
+	//Select the lesser of the two values returned by the two child nodes since
+	//that would represent the total number of complete levels below the current
+	//node
 	if ((b1 == b2) || (b1 > b2))
 		node->branch = 1 + b2;
 	else
@@ -127,6 +159,11 @@ static int branchcompute(node_lc *node)
 	return node->branch;
 }
 
+/*	Count the total number of nodes in each level (root has level=0)
+
+	node: address of a node in the LC-Trie
+	level: array consisting of number of nodes in each level
+	clevel: the current level of "node"*/
 static int countlevels(node_lc *node, int *level, int clevel)
 {
 	unsigned long tmp,i;
@@ -139,6 +176,14 @@ static int countlevels(node_lc *node, int *level, int clevel)
 		countlevels(node->subtrie[i], level, clevel + 1);
 }
 
+/*	Compute the address the node shall occupy in the array of LC-Trie and the
+	address the left most child of this node shall occupy in the array
+
+	node: address of the node under consideration
+	level: an array representing the total number of nodes in each level
+	fill: an array that consists of the total number of nodes that are to the
+	left of "node" in the same level, where level in the array "level" is
+	represented by the index. */
 static int addrarray(node_lc *node, int *level, int *fill, int clevel)
 {
 	int tmp,i,sum = 0;
@@ -149,6 +194,8 @@ static int addrarray(node_lc *node, int *level, int *fill, int clevel)
 	tmp = sum + fill[clevel];
 	fill[clevel]++;
 	node->addr = tmp;
+	//When a leaf node is reached child shall contain the address of string
+	//in base vector
 	if (0 == node->branch)
 	{
 		node->child = node->base;
@@ -157,9 +204,16 @@ static int addrarray(node_lc *node, int *level, int *fill, int clevel)
 	l = 1<<(node->branch);
 	for (k=0;k<l;k++)
 		addrarray(node->subtrie[k], level, fill, clevel+1);
+	//When internal node child shall contain the address (array) of the left
+	//most node it points to
 	node->child = (node->subtrie[0])->addr;
 }
 
+/*	Fill the array with the nodes of the LC-Trie and free the memory occupied
+	by the linked list representation of LC-Trie.
+
+	table: the final array that contains the LC-Trie
+	node: the address of the node that is currently being filled in the trie */
 static int fillarray(node_t *table, node_lc *node)
 {
 	node_t k,l,tmp = 0;
@@ -173,11 +227,21 @@ static int fillarray(node_t *table, node_lc *node)
 		fillarray(table, node->subtrie[k]);
 }
 
+/*	Convert the linked list representation to array representation to enable
+	fast lookup using the algorithm that levereages the idea of using words
+	to minimize memory accesses.
+
+	root: address of the root node of the LC-Trie
+	table: the address of the array where the LC-Trie is to be stored
+	n: total number of nodes in the LC-Trie i.e total number of nodes present in
+	table */
 static int lltoarray(node_lc *root, node_t *table, int *n)
 {
 	int level[ADRSIZE] = {0};
 	int i, sum = 0;
 
+	//Count the total number of nodes in each level where root has ``level"=0
+	//and increases linearly as we traverse in a depth first manner
 	countlevels(root, level, 0);
 	for (i=0;i<ADRSIZE;i++)
 	{
@@ -185,24 +249,45 @@ static int lltoarray(node_lc *root, node_t *table, int *n)
 			break;
 		sum += level[i];
 	}
+
+	/*Represents the current number of nodes that have been filled in that level
+	in a breadth first fashion with the index representing the level.*/
 	int fill[i];
 	memset(fill, 0, sizeof(int)*i);
 	*n = sum;
+
+	//Compute the address the node is to occupy in the array and the address of
+	//the left most node it points to
 	addrarray(root, level, fill, 0);
+
+	//Fill the array with the nodes of the LC-Trie and free the memory occupied
+	//by the linked list representation of LC-Trie
 	fillarray(table, root);
 	return 0;
 }
 
+/*	Compute the addresses of all the nodes that are "level"s below the node
+
+	node: a node that is strictly internal since the recursive call begins from
+	internal node and terminating condition mandates terminating before reaching
+	a leaf node
+	level: the number of vertical levels below "node" whose addresses are
+	required to be passed to the caller. */
 static node_lc **compressedaddr(node_lc *node, int level)
 {
 	unsigned long tmp_branch,i;
 	node_lc **tmp;
+
+	//If the node is parent of the nodes that will be the new children after
+	//level compression of Patricia trie
 	if (1 == level)
 	{
 		tmp = node->subtrie;
 		free(node);
 		return tmp;
 	}
+	//An intermediate node that asks both its children to give the addresses of
+	//nodes present "level"s below this node
 	node_lc **left, **right;
 	left = compressedaddr(node->subtrie[0], level - 1);
 	right = compressedaddr(node->subtrie[1], level - 1);
@@ -218,19 +303,29 @@ static node_lc **compressedaddr(node_lc *node, int level)
 	return tmp;
 }
 
+/*	Compresses the Patricia trie into LC-Trie with the internal nodes removed
+	from memory.
+
+	node: Node of the Patricia trie in the new data structure that supports
+	level compression. */
 static int compresspattolc(node_lc *node)
 {
 	unsigned long i,tmp;
 
+	//If leaf node
 	if (0 == node->branch)
 		return 0;
-	else if (1 == node->branch)
+	else if (1 == node->branch)	//If the branching factor is 1 i.e two children
 	{
 		compresspattolc(node->subtrie[0]);
 		compresspattolc(node->subtrie[1]);
 		return 0;
 	}
+	//If branching factor is more than 1 i.e there is need for compression
 	node_lc **left, **right;
+
+	//Find the addresses of the nodes that will be the new children after the
+	//compression is achieved in this node
 	left = compressedaddr(node->subtrie[0], node->branch - 1);
 	right = compressedaddr(node->subtrie[1], node->branch - 1);
 	free(node->subtrie);
@@ -241,10 +336,20 @@ static int compresspattolc(node_lc *node)
 		node->subtrie[i] = left[i];
 		node->subtrie[i+tmp] = right[i];
 	}
+	//Recursively call this routine for all the new children after the
+	//compression is achieved
 	for (i=0;i<(tmp<<1);i++)
 		compresspattolc(node->subtrie[i]);
 }
 
+/*	Converts the Patricia trie from the original minimalist data structure
+	to a new data structure that supports the level compression to be performed
+	to generate the LC-Trie.
+
+	node: the root address of the Patricia trie
+
+	Returns the root address of the new level compression supporting data
+	structure. */
 static node_lc *pattonewdata(node_patric *node)
 {
 	node_lc *tmp = malloc(sizeof(node_lc));
@@ -271,6 +376,13 @@ static node_lc *pattonewdata(node_patric *node)
 	return tmp;
 }
 
+/*	Does the job of coverting a Patricia Trie to an LC-Trie in array
+	representation.
+
+	root: the address of the root of the Patricia Trie
+	table: the address of the array where the LC-Trie is to be stored
+	n: total number of nodes in the LC-Trie i.e total number of nodes present in
+	table */
 static int pattolc(node_patric *root, node_t *table, int *n)
 {
 	node_lc *newroot;
@@ -280,6 +392,13 @@ static int pattolc(node_patric *root, node_t *table, int *n)
 	lltoarray(newroot, table, n);
 }
 
+/*	Performs binary search of an XID in an array containing XIDs. This routine
+	is needed to link the prefixes in base vector and prefix vector with their
+	respective nexthop XIDs.
+
+	data: the XID to be searched
+	table: the array in which the search is performed
+	n: size of the array */
 int binsearch(xid data, xid *table, int n)
 {
 	int low, mid, high, val;
@@ -303,13 +422,14 @@ int binsearch(xid data, xid *table, int n)
 	return -1;
 }
 
-/* Is the string s a prefix of the string t? */
-
+/*	The input of this routine is two pointers to entry record structures and
+	the output is an integer that essentially answers the question:
+	Is the routing entry in "s" a prefix of the routing entry in "t"? */
 int isprefix(entry_t s, entry_t t)
 {
 	int tmp = 0;
 	int equal = -1;
-	int length;
+	int length;	//Represents the length of the prefix in the routing entry "s"
 	xid s_data, t_data;
 	xid *ps_data = &s_data;
 	xid *pt_data = &t_data;
@@ -325,6 +445,13 @@ int isprefix(entry_t s, entry_t t)
 	return tmp;
 }
 
+/*	This routine builds the nexthop table that contains nexthop XIDs in a sorted
+	fashion. The duplicate addresses are removed and this table returns a
+	pointer	to the first address of an array containing the nexthop xids.
+
+	entry: array of entryrec pointers
+	nentries: number of total entries
+	nexthopsize: contains size of nexthop table */
 static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthopsize)
 {
 	nexthop_t *nexthop, *nexttemp;
@@ -360,13 +487,15 @@ static nexthop_t *buildnexthoptable(entry_t entry[], int nentries, int *nexthops
 	return nexthop;
 }
 
+/*	This routine builds the entire routing table after the original contents of
+	the routing table is read from a file */
 routtable_t buildrouttable(entry_t entry[], int nentries)
 {
 	nexthop_t *nexthop; /* Nexthop table */
 	int nnexthops;
 	int size;           /* Size after dublicate removal */
 	
-	node_t *t;          /* We first build a big data structure... */
+	/* We first build a big data structure... */
 	base_t *b, btemp;
 	pre_t *p, ptemp;
 

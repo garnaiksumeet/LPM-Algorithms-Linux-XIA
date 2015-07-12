@@ -1,5 +1,6 @@
 #include "lc_trie.h"
 
+/*	Bitwise shift left an XID by shift bits and return that shifted XID */
 xid shift_left(xid id, int shift)
 {
 	int byte_s = 0;
@@ -32,6 +33,7 @@ xid shift_left(xid id, int shift)
 	return tmp;
 }
 
+/*	Bitwise shift right an XID by shift bits and return that shifted XID */
 xid shift_right(xid id, int shift)
 {
 	int byte_s = 0;
@@ -64,6 +66,7 @@ xid shift_right(xid id, int shift)
 	return tmp;
 }
 
+/*	Extract length bits starting at pos from data */
 xid extract(int pos, int length, xid data)
 {
 	int i;
@@ -75,6 +78,7 @@ xid extract(int pos, int length, xid data)
 	return tmp;
 }
 
+/*	Remove "bits" bits from data */
 xid removexid(int bits, xid data)
 {
 	int i;
@@ -82,20 +86,6 @@ xid removexid(int bits, xid data)
 
 	tmp = shift_right(shift_left(data, bits), bits);
 	return tmp;
-}
-
-int incrementxid(xid *pxid)
-{
-	int i = 19;
-	unsigned char tmp_max = (unsigned char) -1;
-
-	while ((tmp_max == pxid->w[i]) && (i > -1))
-	{
-		pxid->w[i] = (unsigned char) 0;
-		i--;
-	}
-	if (-1 != i)
-		pxid->w[i] = pxid->w[i] + 1;
 }
 
 /*
@@ -120,6 +110,7 @@ int comparexid(const void *id1, const void *id2)
 		return 0;
 }
 
+/*	Convert and XID to uint32_t */
 uint32_t xidtounsigned(xid *bitpat)
 {
 	uint32_t tmp = bitpat->w[16]<<24 | bitpat->w[17]<<16 |
