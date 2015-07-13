@@ -69,8 +69,7 @@
 
 declare -a arr=("test-read-lctrie" "test-compare-xids" "test-qsort"
 "test-build-nexthop-table" "test-entries" "test-bitwise-shift-left"
-"test-bitwise-shift-right" "test-extract" "test-isprefix" "test-binsearch"
-"test-build-patricia")
+"test-bitwise-shift-right" "test-extract" "test-build-patricia")
 
 for i in "${arr[@]}"
 do

@@ -106,9 +106,19 @@ static int readentries(char *file_name, entry_t entry[], int maxsize)
 
 void run(routtable_t table, int repeat)
 {
-	int i;
+	int i,j;
 	volatile xid res; /* The result of a search is stored in a */
                       /* volative variable to avoid optimization */
+	comp_base_t tmp;
+
+	for (i=0;i<table->basesize;i++)
+	{
+		tmp = table->base[i];
+		res = find(tmp.str, table);
+		for (j=0;j<20;j++)
+			printf("%02x", res.w[j]);
+		printf("\n");
+	}
 }
 
 int main(int argc, char *argv[])
@@ -123,7 +133,6 @@ int main(int argc, char *argv[])
 	int ntraffic;
 
 	int repeat;        /* Number of times to repeat the experiment */
-	int verbose = TRUE;
 
 	int i, j;          /* Auxiliary variables */
 
