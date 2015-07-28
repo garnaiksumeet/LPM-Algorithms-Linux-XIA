@@ -1,3 +1,12 @@
+/* This file is concerned with the generation of synthetic data for evaluation
+ * of LPM algorithms in Linux-XIA. By synthetic data, we refer to the FIB for
+ * LPM on XIDs.
+ *
+ * This is a free software and licensed under GNU General Public License Version
+ * 2.
+ *
+ * Garnaik Sumeet, Michel Machado 2015
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,6 +24,8 @@
 #define ADDR 160
 #define HEXXID 40
 
+/* This is a structure that consists of one entry in the table generated.
+ */
 struct nextcreate {
 	char prefix[HEXXID + 1];
 	int len;
@@ -38,6 +49,10 @@ int main(void)
 	return 0;
 }
 
+/* This is the primary function that facilitates creation of multiple FIBs of
+ * table sizes from the range [2^LEXPFIB, 2^HEXPFIB] where the table size grows
+ * exponentially.
+ */
 static int table_dist(void)
 {
 	int i, j, max_nodes;
@@ -88,6 +103,15 @@ static int table_dist(void)
 	return 0;
 }
 
+/* This routine is concerned with the generation of the final FIB in the human
+ * readable HEX address format for XIDs. The primary goal of this table is to
+ * shuffle the table entries that were previously sorted since the process of
+ * generation of prefixes creates table that are sorted.
+ *
+ * Inputs
+ * pretable: An array consisting of pointers to the entry structs
+ * fibsize: log2(size_of_table)
+ */
 static int final_table(struct nextcreate **pretable, int fibsize)
 {
 	int i, size;
@@ -113,6 +137,16 @@ static int final_table(struct nextcreate **pretable, int fibsize)
 	return 0;
 }
 
+/* This routine is concerned with the generation of nexthops for the prefix
+ * entries in the table. The total number of unique nexthops in each table is a
+ * function of the size of the table. The number of unique nexthops is 2^(i/2)
+ * where the size of the table is 2^i.
+ *
+ * Inputs 
+ * pretable: An array consisting of pointers to the entry structs
+ * uniqtable: An array consisting of pointers to unique entries
+ * fibsize: log2(size_of_table)
+ */
 static int generate_nexthops(struct nextcreate **pretable,
 		struct nextcreate **uniqtable, int fibsize)
 {
@@ -165,6 +199,13 @@ static int generate_nexthops(struct nextcreate **pretable,
 	return j;
 }
 
+/* This routine checks for the availability of an entry in the uniqtable.
+ *
+ * Inputs
+ * table: Refer `uniqtabel`
+ * size: The number of unique entries currently stored in the uniqtable
+ * entry: The entry that is to be looked up in the uniqtable
+ */
 static int in_table(struct nextcreate **table, int size,
 				struct nextcreate *entry)
 {
@@ -178,6 +219,12 @@ static int in_table(struct nextcreate **table, int size,
 	return -1;
 }
 
+/* This routine converts the unformatted entries to the consistent format.
+ *
+ * Inputs
+ * file: The file pointer to the unformatted table
+ * fibsize: log2(size_of_table)
+ */
 static int buffer_table(FILE *file, int fibsize)
 {
 	char tmp_file_name[MAXFILENAME];
@@ -201,6 +248,15 @@ static int buffer_table(FILE *file, int fibsize)
 	return 0;
 }
 
+/* This routine is concerned with the generation of uniformly distributed
+ * prefixes of certain prefix length.
+ *
+ * Inputs:
+ * file: The file pointer to the file that shall consist of the unformatted
+ * entries
+ * size: log2(size_of_table)
+ * prelennum: An array that consists of number of prefixes of each length
+ */
 static int prefix_dist(FILE *file, double size, int *prelennum)
 {
 	int i, j;
@@ -221,6 +277,15 @@ static int prefix_dist(FILE *file, double size, int *prelennum)
 	return 0;
 }
 
+/* This routine is concerned with the generation of uniformly distributed prefix
+ * lengths. We are aware of this strong assumption and will soon replace this
+ * with a more suitable distribution.
+ *
+ * prelength: An array consisting of the prefix lengths in the given
+ * distribution
+ * size: log2(size_of_table)
+ * prelennum: An array that consists of number of prefixes of each length
+ */
 static int prelength_dist(unsigned long int *prelength, double size,
 		int *prelennum)
 {
