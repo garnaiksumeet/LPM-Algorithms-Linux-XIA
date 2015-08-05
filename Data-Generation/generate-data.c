@@ -7,50 +7,15 @@
  *
  * Garnaik Sumeet, Michel Machado 2015
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_sf_pow_int.h>
-#include <gsl/gsl_randist.h>
 
-#define LEXPFIB 4
-#define HEXPFIB 20
-#define MAXFILENAME 10
-#define OFFSET 20
-#define MAXRAND 140
-#define ADDR 160
-#define HEXXID 40
-#define SEEDS 150000
-#define SEEDFILE "seeds"
-#define BITRAND 2
-#define BYTE 8
-#define DUPS 5000 // This is simply an observation of the actual tables created
-
-/* 
- * This is a structure that consists of one entry in the table generated.
- * The name of the structure is a misnomer.
- * Initially it was planned to be a structure to generate nexthop entry
- */
-struct nextcreate {
-	unsigned char prefix[HEXXID];
-	unsigned int len;
-	unsigned int nexthop;
-};
-
-struct duplicate {
-	struct nextcreate *ori;
-	struct nextcreate *dup;
-};
+#include "generate_fibs.h"
 
 /*
  * Print the table
- * */
-static int print_table(struct nextcreate **pretable, double size, int prexp)
+ */
+int print_table(struct nextcreate **pretable, int size, int prexp)
 {
 	unsigned int i, j;
-	unsigned int max = (unsigned int) (size + 0.5);
 	unsigned char tmp_prefix[HEXXID + 1] = {0};
 	char file_name[MAXFILENAME];
 	FILE *tmp_file;
@@ -59,9 +24,9 @@ static int print_table(struct nextcreate **pretable, double size, int prexp)
 	sprintf(file_name, "%d.table", prexp);
 	tmp_file = fopen(file_name, "w+");
 
-	for (i = 0; i < max; i++) {
+	for (i = 0; i < size; i++) {
 		memcpy(tmp_prefix, pretable[i]->prefix, HEXXID);
-		for (j = 0; j < 20; j++)
+		for (j = 0; j < HEXXID; j++)
 			fprintf(tmp_file, "%02x", pretable[i]->prefix[j]);
 		fprintf(tmp_file, " %d %d\n", pretable[i]->len,
 				pretable[i]->nexthop);
@@ -70,26 +35,8 @@ static int print_table(struct nextcreate **pretable, double size, int prexp)
 }
 
 /*
- * Comparison function to compare prefixes
- * */
-static int compareprefix(const void *id1, const void *id2)
-{
-	int res;
-	unsigned char **tmp1 = (unsigned char **) id1;
-	unsigned char **tmp2 = (unsigned char **) id2;
-
-	res = memcmp(*tmp1, *tmp2, 20);
-
-	if (res < 0)
-		return -1;
-	else if (res > 0)
-		return 1;
-	else
-		return 0;
-}
-/*
  * Comparison function to be passed to qsort for sorting of entries
- * */
+ */
 static int sortentries(const void *e1, const void *e2)
 {
 	int res;
@@ -98,7 +45,7 @@ static int sortentries(const void *e1, const void *e2)
 	unsigned char *pre1 = (*entry1)->prefix;
 	unsigned char *pre2 = (*entry2)->prefix;
 
-	res = compareprefix(&pre1, &pre2);
+	res = memcmp(pre1, pre2, 20);
 
 	if (res < 0)
 		return -1;
@@ -106,6 +53,82 @@ static int sortentries(const void *e1, const void *e2)
 		return 1;
 	else
 		return 0;
+}
+
+/*
+ * This routine generates an unsigned char containing `8 - bit` random bits using
+ * the random variable `r` from MSB to LSB.
+ *
+ * Inputs:
+ * r: Random variable used by GSL
+ * bit: Number of random bits = 8 - bit
+ */
+static unsigned char uniform_char(gsl_rng *r, int bit)
+{
+	int i;
+	unsigned char tmp_char = 0;
+	unsigned char res = 0;
+	unsigned long int tmp_bit;
+
+	for (i = (BYTE - 1); i >= bit; i--) {
+		tmp_bit = gsl_rng_uniform_int(r, BITRAND);
+		// In order to be endian agnostic
+		if (1 == tmp_bit) {
+			tmp_char = 1;
+			tmp_char = tmp_char << i;
+		} else {
+			tmp_char = 0;
+		}
+		res = res | tmp_char;
+	}
+
+	return res;
+}
+
+/*
+ * This routine is concerned with the replacement of duplicates in the FIBs
+ * generated such that all the entries in the FIB are distinct.
+ *
+ * Inputs:
+ * dup_table: array consisting of indexes of duplicate structs
+ * seed: seed to be used to generate the replacements of duplicates
+ * sortedtable: array consisting of sorted entries
+ * size: number of duplicates
+ * sortsize: number of entries in sortedtable
+ */
+static int remove_duplicates(unsigned int *dup_table, int seed,
+		struct nextcreate **sortedtable, int size, int sortsize)
+{
+	int i, j;
+	int bytes, bits;
+	int flag;
+	unsigned long int tmp;
+	gsl_rng *r;
+
+	r = gsl_rng_alloc(gsl_rng_ranlux);
+	gsl_rng_set(r, seed);
+
+	for (i = 0; i < size; i++) {
+		flag = FALSE;
+		while (flag) {
+			memset(sortedtable[dup_table[i]]->prefix, 0, HEXXID);
+			bytes = sortedtable[dup_table[i]]->len / BYTE;
+			bits = sortedtable[dup_table[i]]->len % BYTE;
+			for (j = 0; j < bytes; j++)
+				sortedtable[dup_table[i]]->prefix[j] =
+					uniform_char(r, 0);
+			sortedtable[dup_table[i]]->prefix[j] =
+				uniform_char(r, (BYTE - bits));
+			if (NULL == bsearch(&sortedtable[dup_table[i]],
+				&sortedtable[0], sortsize,
+				sizeof(struct nextcreate *), sortentries))
+				flag = TRUE;
+		}
+	}
+
+	gsl_rng_free(r);
+
+	return 0;
 }
 
 /* 
@@ -120,46 +143,46 @@ static int sortentries(const void *e1, const void *e2)
  * seeds: array containing seeds
  * tablexp: log2(size)
  */
-static int nexthop_dist(struct nextcreate **pretable, double size,
-		uint32_t *seeds, int tablexp)
+static int nexthop_dist(struct nextcreate **pretable, int size,
+		uint32_t *seeds, int low, int tablexp)
 {
-	struct nextcreate **tmp_table = NULL;
 	int i, j;
-	struct duplicate **dup_table = NULL;
+	struct nextcreate **tmp_table = NULL;
+	unsigned int *dup_table = NULL;
 	unsigned int maxnexthops;
 	unsigned long int tmp;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
-	gsl_rng_set(r, seeds[tablexp - LEXPFIB + 2 * HEXPFIB]);
+	gsl_rng_set(r, seeds[low]);
 
 	tmp_table = malloc(size * sizeof(struct nextcreate *));
 	for (i = 0; i < size; i++)
 		tmp_table[i] = pretable[i];
 
 	qsort(tmp_table, size, sizeof(struct nextcreate *), sortentries);
-	dup_table = malloc(DUPS * sizeof(struct duplicate *));
+	dup_table = malloc(DUPS * sizeof(unsigned int));
 	j = 0;
 	for (i = 1; i < size; i++) {
 		if ((0 == sortentries(&tmp_table[i - 1], &tmp_table[i])) &&
 				(tmp_table[i-1]->len == tmp_table[i]->len)) {
-			dup_table[j] = malloc(sizeof(struct duplicate));
-			dup_table[j]->ori = tmp_table[i - 1];
-			dup_table[j]->dup = tmp_table[i];
-			j++;
+			dup_table[j] = i;
+			assert(j++ < DUPS);
 		}
 	}
-	maxnexthops = (unsigned int) (gsl_sf_pow_int(2.0, tablexp/2) + 0.5);
+	remove_duplicates(dup_table, seeds[low + 1], tmp_table, j, size);
+	maxnexthops = 1 << (tablexp / 2);
 	for (i = 0; i < size; i++) {
 		tmp = gsl_rng_uniform_int(r, maxnexthops) + 1;
 		tmp_table[i]->nexthop = (unsigned int) tmp;
 	}
-	for (i = 0; i < j; i++)
-		(dup_table[i]->dup)->len = (dup_table[i]->ori)->len;
+
+	gsl_rng_free(r);
+
 	free(tmp_table);
-	for (i = 0; i < j; i++)
-		free(dup_table[i]);
 	free(dup_table);
+
+	return 0;
 }
 
 /* 
@@ -169,40 +192,31 @@ static int nexthop_dist(struct nextcreate **pretable, double size,
  * Inputs:
  * pretable: An array consisting of pointers to the entry structs
  * size: number of entries in the table
- * seeds: array containing seeds
+ * seed: seed
  * tablexp: log2(size)
  */
-
-static int prefix_dist(struct nextcreate **pretable, double size,
-		uint32_t *seeds, int tablexp)
+static int prefix_dist(struct nextcreate **pretable, int size, 
+		uint32_t seed, int tablexp)
 {
-	unsigned int i, j;
+	int i, j, k;
+	int bytes, bits;
 	unsigned char tmp_prefix[HEXXID] = {0};
-	unsigned long int tmp_bit;
-	unsigned char tmp_char;
-	unsigned int index, bit;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
-	gsl_rng_set(r, seeds[tablexp - LEXPFIB + HEXPFIB]);
+	gsl_rng_set(r, seed);
 
 	for (i = 0; i < size; i++) {
 		memset(pretable[i]->prefix, 0, HEXXID);
-		for (j = 0; j < pretable[i]->len; j++) {
-			tmp_bit = gsl_rng_uniform_int(r, BITRAND);
-			index = j / BYTE;
-			bit  = j % BYTE;
-			// In order to be endian agnostic
-			if (1 == tmp_bit) {
-				tmp_char = 1;
-				tmp_char = tmp_char << (BYTE - bit - 1);
-			} else {
-				tmp_char = 0;
-			}
-			pretable[i]->prefix[index] =
-				pretable[i]->prefix[index] | tmp_char;
-		}
+		bytes = pretable[i]->len / BYTE;
+		bits = pretable[i]->len % BYTE;
+		for (j = 0; j < bytes; j++)
+			pretable[i]->prefix[j] = uniform_char(r, 0);
+		pretable[i]->prefix[j] = uniform_char(r, (BYTE - bits));
 	}
+
+	gsl_rng_free(r);
+
 	return 0;
 }
 
@@ -213,18 +227,18 @@ static int prefix_dist(struct nextcreate **pretable, double size,
  *
  * pretable: An array consisting of pointers to the entry structs
  * size: number of entries in the table
- * seeds: array containing seeds
+ * seed: seed
  * tablexp: log2(size)
  */
-static int prelength_dist(struct nextcreate **pretable, double size,
-		uint32_t *seeds, int tablexp)
+static int prelength_dist(struct nextcreate **pretable, int size,
+		uint32_t seed, int tablexp)
 {
 	int i;
 	gsl_rng *r;
 	unsigned long int tmp;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
-	gsl_rng_set(r, seeds[tablexp - LEXPFIB]);
+	gsl_rng_set(r, seed);
 
 	for (i = 0; i < size; i++) {
 		tmp = gsl_rng_uniform_int(r, MAXRAND) + OFFSET;
@@ -240,40 +254,27 @@ static int prelength_dist(struct nextcreate **pretable, double size,
  * This is the primary function that facilitates creation of multiple FIBs of
  * table sizes from the range [2^LEXPFIB, 2^HEXPFIB] where the table size grows
  * exponentially.
+ *
+ * Inputs:
+ * tablexp: log2(length of pretable i.e number of entries)
+ * seeds: array containing seeds
+ * low: lower index in the array for using seeds
+ * pretable: array of pointers to nextcreate structs i.e pointers to entries
  */
-static int table_dist(void)
+int table_dist(int tablexp, uint32_t *seeds, int low,
+		struct nextcreate **pretable)
 {
-	int i, j, seedsize;
-	double size;
-	char *file_names[HEXPFIB - LEXPFIB + 1];
-	FILE *tmp_file, *seed_file;
-	struct nextcreate **pretable = NULL;
-	uint32_t *seeds;
+	int i;
+	int size;
+	struct nextcreate *table= NULL;
 
-	seeds = malloc(SEEDS * sizeof(uint32_t));
-	memset(seeds, 0, SEEDS * sizeof(uint32_t));
-	seed_file = fopen(SEEDFILE, "r");
-	i = 0;
-	while (fscanf(seed_file, "%8x\n", &seeds[i]) != EOF)
-		i++;
-	seedsize = i;
-	fclose(seed_file);
-
-	i = 0;
-	for (i = LEXPFIB; i <= HEXPFIB; i++) {
-		size = gsl_sf_pow_int(2.0, i);
-		pretable = malloc(size * sizeof(struct nextcreate *));
-		for (j = 0; j < size; j++)
-			pretable[j] = malloc(sizeof(struct nextcreate));
-		prelength_dist(pretable, size, seeds, i);
-		prefix_dist(pretable, size, seeds, i);
-		nexthop_dist(pretable, size, seeds, i);
-		printf("%d\n", i);
-		print_table(pretable, size, i);
-		for (j = 0; j < size; j++)
-			free(pretable[j]);
-		free(pretable);
-	}
+	size = 1 << tablexp;
+	table = malloc(size * sizeof(struct nextcreate));
+	for (i = 0; i < size; i++)
+		pretable[i] = (table + i);
+	prelength_dist(pretable, size, seeds[low], tablexp);
+	prefix_dist(pretable, size, seeds[low + 1], tablexp);
+	nexthop_dist(pretable, size, seeds, low + 2, tablexp);
 
 	return 0;
 }
