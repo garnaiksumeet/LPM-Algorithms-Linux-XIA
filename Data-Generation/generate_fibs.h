@@ -6,9 +6,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#include <stdint.h>
+#include <search.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
-#include <stdint.h>
 
 #undef TRUE
 #define TRUE 0
@@ -41,8 +42,8 @@ struct nextcreate {
 	unsigned int nexthop;
 };
 
-int table_dist(int tablexp, uint32_t *seeds, int low,
-		struct nextcreate **pretable);
-int print_table(struct nextcreate **pretable, int size, int prexp);
+struct nextcreate *table_dist(int tablexp, uint32_t *seeds, int low,
+		int size_seeds, int nnexthops);
+int print_table(struct nextcreate *table, int size, int prexp);
 
 #endif
