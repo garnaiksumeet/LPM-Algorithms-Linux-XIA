@@ -249,16 +249,16 @@ static int prelength_dist(struct nextcreate *table, int size, gsl_rng *r)
  * tablexp: log2(length of pretable i.e number of entries)
  * seeds: array containing seeds
  * low: lower index in the array for using seeds
+ * table: FIB
  * size_seeds: number of seeds in seeds
  * nnexthops: number of unique nexthops in the FIB
  */
-struct nextcreate *table_dist(int tablexp, uint32_t *seeds, int low,
+int table_dist(int tablexp, uint32_t *seeds, int low, struct nextcreate *table,
 		int size_seeds, int nnexthops)
 {
 	int i;
 	int size;
 	gsl_rng *r[3];
-	struct nextcreate *table = NULL;
 
 	for (i = 0; i < 3; i++) {
 		r[i] = gsl_rng_alloc(gsl_rng_ranlux);
@@ -266,8 +266,6 @@ struct nextcreate *table_dist(int tablexp, uint32_t *seeds, int low,
 		gsl_rng_set(r[i], seeds[low + i]);
 	}
 	size = 1 << tablexp;
-	table = malloc(size * sizeof(struct nextcreate));
-	assert(table);
 	prelength_dist(table, size, r[0]);
 	prefix_dist(table, size, r[1]);
 	deduplication(table, size, r[1]);
@@ -276,5 +274,5 @@ struct nextcreate *table_dist(int tablexp, uint32_t *seeds, int low,
 	for (i = 0; i < 3; i++)
 		gsl_rng_free(r[i]);
 
-	return table;
+	return 0;
 }

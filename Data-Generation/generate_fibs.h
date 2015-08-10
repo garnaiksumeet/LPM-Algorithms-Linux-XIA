@@ -42,7 +42,7 @@ struct nextcreate {
 	unsigned int nexthop;
 };
 
-struct nextcreate *table_dist(int tablexp, uint32_t *seeds, int low,
+int table_dist(int tablexp, uint32_t *seeds, int low, struct nextcreate *table,
 		int size_seeds, int nnexthops);
 int print_table(struct nextcreate *table, int size, int prexp);
 
