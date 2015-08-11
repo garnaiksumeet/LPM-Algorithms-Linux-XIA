@@ -12,10 +12,10 @@
 #include <gsl/gsl_randist.h>
 
 #undef TRUE
-#define TRUE 0
+#define TRUE 1
 
 #undef FALSE
-#define FALSE 1
+#define FALSE 0
 
 #define LEXPFIB 4
 #define HEXPFIB 20

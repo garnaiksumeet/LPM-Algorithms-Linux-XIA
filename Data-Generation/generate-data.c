@@ -126,7 +126,7 @@ static int remove_duplicates(struct nextcreate **dup_table, int dsize,
 	struct nextcreate *match_dup = NULL;
 
 	for (i = 0; i < dsize; i++) {
-		flag = FALSE;
+		flag = TRUE;
 		while (flag) {
 			memset(dup_table[i]->prefix, 0, HEXXID);
 			bytes = dup_table[i]->len / BYTE;
@@ -144,7 +144,7 @@ static int remove_duplicates(struct nextcreate **dup_table, int dsize,
 				(size_t *) &dsize, sizeof(struct nextcreate *),
 				sortentries);
 			if ((NULL == match_sorted) && (NULL == match_dup))
-				flag = TRUE;
+				flag = FALSE;
 		}
 	}
 
