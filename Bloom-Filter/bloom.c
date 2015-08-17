@@ -45,47 +45,28 @@ void free_bitmap(bitmap_t *bitmap)
 	if ((munmap(bitmap->array, bitmap->bytes)) < 0) {
 		perror("Error, unmapping memory");
 	}
-	close(bitmap->fd);
 	free(bitmap);
 }
 
 bitmap_t *bitmap_resize(bitmap_t *bitmap, size_t old_size, size_t new_size)
 {
-	int fd = bitmap->fd;
-	struct stat fileStat;
-
-	fstat(fd, &fileStat);
-	size_t size = fileStat.st_size;
-
-	/* grow file if necessary */
-	if (size < new_size) {
-		if (ftruncate(fd, new_size) < 0) {
-			perror("Error increasing file size with ftruncate");
-			free_bitmap(bitmap);
-			close(fd);
-			return NULL;
-		}
-	}
-	lseek(fd, 0, SEEK_SET);
-
-	/* resize if mmap exists and possible on this os, else new mmap */
+	/* resize if mmap exists else new mmap */
 	if (bitmap->array != NULL) {
 		bitmap->array = mremap(bitmap->array, old_size, new_size,
 					MREMAP_MAYMOVE);
 		if (bitmap->array == MAP_FAILED) {
 			perror("Error resizing mmap");
 			free_bitmap(bitmap);
-			close(fd);
 			return NULL;
 		}
 	}
+
 	if (bitmap->array == NULL) {
 		bitmap->array = mmap(0, new_size, PROT_READ | PROT_WRITE,
-						MAP_SHARED, fd, 0);
+				MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 		if (bitmap->array == MAP_FAILED) {
 			perror("Error init mmap");
 			free_bitmap(bitmap);
-			close(fd);
 			return NULL;
 		}
 	}
@@ -96,7 +77,7 @@ bitmap_t *bitmap_resize(bitmap_t *bitmap, size_t old_size, size_t new_size)
 
 /* Create a new bitmap, not full featured, simple to give
  * us a means of interacting with the 4 bit counters */
-bitmap_t *new_bitmap(int fd, size_t bytes)
+bitmap_t *new_bitmap(size_t bytes)
 {
 	bitmap_t *bitmap;
 
@@ -105,7 +86,6 @@ bitmap_t *new_bitmap(int fd, size_t bytes)
 	}
 
 	bitmap->bytes = bytes;
-	bitmap->fd = fd;
 	bitmap->array = NULL;
 
 	if ((bitmap = bitmap_resize(bitmap, 0, bytes)) == NULL) {
@@ -172,16 +152,6 @@ int bitmap_check(bitmap_t *bitmap, unsigned int index, long offset)
 	}
 }
 
-int bitmap_flush(bitmap_t *bitmap)
-{
-	if ((msync(bitmap->array, bitmap->bytes, MS_SYNC) < 0)) {
-		perror("Error, flushing bitmap to disk");
-		return -1;
-	} else {
-		return 0;
-	}
-}
-
 /*
  * Perform the actual hashing for `key`
  *
@@ -201,9 +171,8 @@ void hash_func(counting_bloom_t *bloom, const char *key, size_t key_len,
 	uint32_t h1 = checksum[0];
 	uint32_t h2 = checksum[1];
 
-	for (i = 0; i < bloom->nfuncs; i++) {
+	for (i = 0; i < bloom->nfuncs; i++)
 		hashes[i] = (h1 + i * h2) % bloom->counts_per_func;
-	}
 }
 
 int free_counting_bloom(counting_bloom_t *bloom)
@@ -243,21 +212,12 @@ counting_bloom_t *counting_bloom_init(unsigned int capacity,
 	return bloom;
 }
 
-counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate,
-		const char *filename)
+counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate)
 {
 	counting_bloom_t *cur_bloom;
-	int fd;
-
-	if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC,
-					(mode_t)0600)) < 0) {
-		perror("Error, Opening File Failed");
-		fprintf(stderr, " %s \n", filename);
-		return NULL;
-	}
 
 	cur_bloom = counting_bloom_init(capacity, error_rate, 0);
-	cur_bloom->bitmap = new_bitmap(fd, cur_bloom->num_bytes);
+	cur_bloom->bitmap = new_bitmap(cur_bloom->num_bytes);
 	cur_bloom->header = (counting_bloom_header_t *)
 				(cur_bloom->bitmap->array);
 	return cur_bloom;
@@ -302,7 +262,7 @@ int counting_bloom_check(counting_bloom_t *bloom, const char *s, size_t len)
 	unsigned int *hashes = bloom->hashes;
 
 	hash_func(bloom, s, len, hashes);
-	
+
 	for (i = 0; i < bloom->nfuncs; i++) {
 		offset = i * bloom->counts_per_func;
 		index = hashes[i] + offset;
@@ -312,43 +272,4 @@ int counting_bloom_check(counting_bloom_t *bloom, const char *s, size_t len)
 	}
 
 	return 1;
-}
-
-counting_bloom_t *new_counting_bloom_from_file(unsigned int capacity,
-		double error_rate, const char *filename)
-{
-	int fd;
-	off_t size;
-
-	counting_bloom_t *bloom;
-
-	if ((fd = open(filename, O_RDWR, (mode_t)0600)) < 0) {
-		fprintf(stderr, "Error, Could not open file %s: %s\n",
-				filename, strerror(errno));
-		return NULL;
-	}
-	if ((size = lseek(fd, 0, SEEK_END)) < 0) {
-		perror("Error, calling lseek() to tell file size");
-		close(fd);
-		return NULL;
-	}
-	if (size == 0) {
-		fprintf(stderr, "Error, File size zero\n");
-	}
-
-	bloom = counting_bloom_init(capacity, error_rate, 0);
-
-	if (size != bloom->num_bytes) {
-		free_counting_bloom(bloom);
-		fprintf(stderr, "Error, Actual filesize and expected filesize are not equal\n");
-		return NULL;
-	}
-	if ((bloom->bitmap = new_bitmap(fd, size)) == NULL) {
-		fprintf(stderr, "Error, Could not create bitmap with file\n");
-		free_counting_bloom(bloom);
-		return NULL;
-	}
-
-	bloom->header = (counting_bloom_header_t *)(bloom->bitmap->array);
-	return bloom;
 }
