@@ -76,6 +76,7 @@ struct bloom_structure *create_fib(struct nextcreate *table,
 	struct bloom_structure *filter = NULL;
 
 	filter = malloc(sizeof(struct bloom_structure));
+	assert(filter);
 	memset(filter->length, 0, WDIST * sizeof(unsigned int));
 	memset(filter->low, -1, WDIST * sizeof(int));
 	memset(filter->high, -1, WDIST * sizeof(int));
