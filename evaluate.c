@@ -58,7 +58,7 @@ static int lookup_experiments(struct nextcreate *table, int exp,
 	pid_t id;
 	int val;
 	unsigned long size = 1 << exp;
-        unsigned long accum;
+	unsigned long accum;
 	int (*experiments[])(const void *, const void *, const void *) = {
 		evaluate_lookups_bloom,
 		NULL,
