@@ -9,7 +9,7 @@
 #define RESOLUTION 1000000000L
 #define RUNS 21
 #define NSAMPLES (size / 5)
-#define NEXTSEED (RUNS * 3)
+#define NEXTSEED ((RUNS - 1) * 3)
 #define LOOPSEED 3
 #define GETTIME(x, y) ((y.tv_sec - y.tv_sec) * RESOLUTION + (y.tv_nsec - x.tv_nsec))
 
@@ -44,9 +44,15 @@ static struct nextcreate **sample_table(struct nextcreate *table,
 	return sample;
 }
 
+static int evaluate_lookups_lctrie(const void *t, const void *s, const void *ls)
+{
+	// Perform relevant operations
+	return 0;
+}
+
 static int evaluate_lookups_bloom(const void *t, const void *s, const void *ls)
 {
-	// Perform relevant actions
+	// Perform relevant operations
 	return 0;
 }
 
@@ -61,6 +67,7 @@ static int lookup_experiments(struct nextcreate *table, int exp,
 	unsigned long accum;
 	int (*experiments[])(const void *, const void *, const void *) = {
 		evaluate_lookups_bloom,
+		evaluate_lookups_lctrie,
 		NULL,
 	};
 
@@ -84,7 +91,6 @@ static int lookup_experiments(struct nextcreate *table, int exp,
 			} else {
 				wait(NULL);
 			}
-			sleep(4);
 		}
 	}
 
@@ -121,7 +127,6 @@ int main(int argc, char *argv[])
 				nnexthops);
 		low = low + NEXTSEED;
 		assert(low < seedsize);
-		sleep(5);
 		free(table);
 	}
 }
