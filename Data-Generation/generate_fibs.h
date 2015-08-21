@@ -17,8 +17,7 @@
 #undef FALSE
 #define FALSE 0
 
-#define LEXPFIB 4
-#define HEXPFIB 20
+#define NEXTSEED 3
 #define MAXFILENAME 10 // Maximum lenght of file name
 #define OFFSET 20 // Offset for the random length generated
 #define MAXRAND 140 // Bound for random length generation
