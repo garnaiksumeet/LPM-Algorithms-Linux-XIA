@@ -1,5 +1,5 @@
 #include "./Data-Generation/generate_fibs.h"
-#include "./Bloom-Filter/bloom.h"
+#include "./Bloom-Filter/lpm_bloom.h"
 #include "./LC-Trie/lc_trie.h"
 #include <fcntl.h>
 #include <time.h>
@@ -65,18 +65,23 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	uint32_t *seed = (uint32_t *) s;
 	int i;
 	unsigned long int tmp;
+	double error_rate = 0.05;
 	unsigned long accum = 0;
+	unsigned char xid[HEXXID + 1] = {0};
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
 	gsl_rng_set(r, *seed);
 
 	// Create the data structure
+	struct bloom_structure *filter = create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = gsl_rng_uniform_int(r, *size);
 		// Sample from table and set the XID in appropriate form
-		time_measure(&start);
+		memcpy(xid, table[tmp].prefix, HEXXID);
 		// Perform lookup
+		time_measure(&start);
+		assert(lookup_bloom(xid, filter));
 		time_measure(&stop);
 		accum += gettime(start, stop);
 	}
