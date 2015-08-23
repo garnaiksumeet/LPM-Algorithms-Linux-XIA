@@ -26,6 +26,7 @@
 #define __BLOOM_H__
 #include <stdint.h>
 #include <stdlib.h>
+#include "hashmap.h"
 
 typedef struct {
 	size_t bytes;
@@ -62,8 +63,10 @@ typedef struct {
 
 int free_counting_bloom(counting_bloom_t *bloom);
 counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate);
-int counting_bloom_add(counting_bloom_t *bloom, const char *s, size_t len);
-int counting_bloom_remove(counting_bloom_t *bloom, const char *s, size_t len);
+int counting_bloom_add(counting_bloom_t *bloom, struct hashmap *hmap,
+		const char *s, size_t len, unsigned int nexthop);
+int counting_bloom_remove(counting_bloom_t *bloom, struct hashmap *hmap,
+		const char *s, size_t len);
 int counting_bloom_check(counting_bloom_t *bloom, const char *s, size_t len);
 
 #endif
