@@ -34,6 +34,7 @@
 #include <math.h>
 #include <float.h>
 #include <stdint.h>
+#include "../Data-Generation/generate_fibs.h"
 
 
 #define ADRSIZE 160       /* the number of bits in an address */
@@ -121,7 +122,9 @@ struct routtablerec
 	int nexthopsize;
 };
 
-/*	The structure of each node for building the path compressed trie from XIDs*/
+/*
+ * The structure of each node for building the path compressed trie from XIDs
+ */
 typedef struct node_patric node_patric;
 struct node_patric
 {
@@ -159,18 +162,23 @@ xid shift_right(xid id, int shift);
 /* Build the routing table */
 routtable_t buildrouttable(entry_t entry[], int nentries);
 
-/* Dispose of the routing table */
-void disposerouttable(routtable_t t);
+struct routtablerec *lctrie_create_fib(struct nextcreate *table,
+		unsigned long size);
 
-/*	Extract the 32 LSBs and cast to uint32_t */
+int lctrie_destroy_fib(struct routtablerec *rtable);
+
+/* 
+ * Extract the 32 LSBs and cast to uint32_t
+ */
 uint32_t xidtounsigned(xid *bitpat);
 
-/*	Compare XIDs and return 0, 1, -1 depending on the values pointed by
-	dereferencing id1 and id2 twice. */
+/* 
+ * Compare XIDs and return 0, 1, -1 depending on the values pointed by
+ * dereferencing id1 and id2 twice.
+ */
 int comparexid(const void *id1, const void *id2);
 
 /* Perform a lookup. */
 nexthop_t find(xid s, routtable_t t);
-
 
 #endif // _LC_TRIE_H_
