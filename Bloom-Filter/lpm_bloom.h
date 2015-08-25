@@ -33,9 +33,9 @@ struct bloom_structure {
 	struct hashmap *hashtable[WDIST];
 };
 
-struct bloom_structure *create_fib(struct nextcreate *table,
+struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate);
-unsigned int lookup_bloom(const char *id, void *bf);
-int destroy_fib(struct bloom_structure *filter);
+unsigned int lookup_bloom(unsigned char *id, void *bf);
+int bloom_destroy_fib(struct bloom_structure *filter);
 
 #endif

@@ -1,19 +1,6 @@
-#include "bloom.h"
-#include "murmur.h"
+#include "lpm_bloom.h"
 
-#define WDIST 140
-#define MINLENGTH 20
-#define MAXLENGTH 159
-#define NTIMES 2
-
-struct bloom_structure {
-	// Although this could be computed using low and high, we are storing it
-	// for convenience.
-	unsigned int length[WDIST];
-	int low[WDIST];
-	int high[WDIST];
-	counting_bloom_t *bloom[WDIST];
-};
+#define SALT_CONSTANT 0x97c29b3a
 
 static int sortbylength(const void *e1, const void *e2)
 {
@@ -31,7 +18,7 @@ static int sortbylength(const void *e1, const void *e2)
 		return 0;
 }
 
-static int bloom_proportion(struct bloom_structure *bloom_filter,
+static int bloom_proportion(struct bloom_structure *filter,
 		struct nextcreate **tmp_table, unsigned long size)
 {
 	int j = 0;
@@ -40,47 +27,49 @@ static int bloom_proportion(struct bloom_structure *bloom_filter,
 	for (i = MINLENGTH; i <= MAXLENGTH; i++) {
 		if (i != tmp_table[j]->len)
 			continue;
-		bloom_filter->low[i - MINLENGTH] = j;
+		filter->low[i - MINLENGTH] = j;
 		while (i == tmp_table[j]->len) {
 			j++;
 			if (size == j)
 				break;
 		}
-		bloom_filter->high[i - MINLENGTH] = (j - 1);
-		bloom_filter->length[i - MINLENGTH] =
-			j - bloom_filter->low[i - MINLENGTH];
-		bloom_filter->bloom[i - MINLENGTH] = NULL;
+		filter->high[i - MINLENGTH] = (j - 1);
+		filter->length[i - MINLENGTH] = j - filter->low[i - MINLENGTH];
+		filter->bloom[i - MINLENGTH] = NULL;
+		filter->hashtable[i - MINLENGTH] = NULL;
+		filter->flag[i - MINLENGTH] = 1;
 		if (size == j)
 			break;
 	}
 }
 
-int destroy_fib(struct bloom_structure *filter)
+int bloom_destroy_fib(struct bloom_structure *filter)
 {
 	int i;
 
 	for (i = 0; i < WDIST; i++) {
-		if (0 != bloom_filter->length[i])
-			free_counting_bloom(bloom_filter->bloom[i]);
+		if (filter->flag) {
+			free_counting_bloom(filter->bloom[i]);
+			hashmap_destroy(filter->hashtable[i]);
+		}
 	}
+	free(filter);
 
 	return 0;
 }
 
-struct bloom_structure *create_fib(struct nextcreate *table,
+struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate)
 {
-	int i;
-	char xid[HEXXID + 1];
+	int i, j;
+	unsigned char xid[HEXXID + 1] = {0};
 	struct nextcreate **tmp_table = NULL;
 	struct bloom_structure *filter = NULL;
 
-	filter = malloc(sizeof(struct bloom_structure));
+	filter = calloc(1, sizeof(struct bloom_structure));
 	assert(filter);
-	memset(filter->length, 0, WDIST * sizeof(unsigned int));
 	memset(filter->low, -1, WDIST * sizeof(int));
 	memset(filter->high, -1, WDIST * sizeof(int));
-	memset(filter->bloom, 0, WDIST * sizeof(struct counting_bloom_t *));
 
 	tmp_table = malloc(size * sizeof(struct nextcreate *));
 	assert(tmp_table);
@@ -91,20 +80,51 @@ struct bloom_structure *create_fib(struct nextcreate *table,
 	bloom_proportion(filter, tmp_table, size);
 
 	for (i = 0; i < WDIST; i++) {
-		if (0 == filter->length[i])
+		if (!filter->flag[i])
 			continue;
 		if (!(filter->bloom[i] =
 		new_counting_bloom(filter->length[i] * NTIMES, error_rate))) {
 			printf("ERROR: Could not create bloom filter\n");
-			return 1;
+			return NULL;
 		}
+		assert(0 == hashmap_init(filter->length[i], &filter->hashtable[i]));
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
-			memset(xid, 0, HEXXID + 1);
 			memcpy(xid, tmp_table[j]->prefix, HEXXID);
-			assert(0 == counting_bloom_add(filter->bloom[i], xid,
-						HEXXID));
+			assert(0 == counting_bloom_add(filter->bloom[i],
+				filter->hashtable[i], xid, HEXXID,
+				tmp_table[j]->nexthop));
 		}
 	}
 
 	return filter;
+}
+
+unsigned int lookup_bloom(unsigned char *id, void *bf)
+{
+	int i;
+	uint64_t out[2];
+	unsigned int nexthop;
+	struct bloom_structure *filter = (struct bloom_structure *) bf;
+	// The returned values of counting_bloom_check() are 0 if found else 1
+	unsigned char matchvec[WDIST] = {1};
+
+	// Although the paper suggests to perform parallel membership queries
+	for (i = WDIST - 1; i >= 0; i--) {
+		id[i / BYTE] = id[i / BYTE] >> (BYTE - i % BYTE) <<
+			(BYTE - i % BYTE);
+		if (!filter->flag[i])
+			continue;
+		matchvec[i] = counting_bloom_check(filter->bloom[i], id,
+								HEXXID);
+	}
+	// Parse the matchvec in increasing order and perform hashmap searches
+	for (i = 0; i < WDIST; i++) {
+		if (matchvec[i])
+			continue;
+		MurmurHash3_x64_128(id, HEXXID, SALT_CONSTANT, out);
+		if (!hashmap_get(filter->hashtable[i], id, out[1], &nexthop))
+			return nexthop;
+	}
+
+	return 0;
 }

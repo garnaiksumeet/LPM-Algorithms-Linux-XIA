@@ -74,7 +74,7 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	gsl_rng_set(r, *seed);
 
 	// Create the data structure
-	struct bloom_structure *filter = create_fib(table, *size, error_rate);
+	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = gsl_rng_uniform_int(r, *size);
 		// Sample from table and set the XID in appropriate form
@@ -86,6 +86,7 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 		accum += gettime(start, stop);
 	}
 	gsl_rng_free(r);
+	bloom_destroy_fib(filter);
 	return 0;
 }
 
