@@ -99,7 +99,7 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 	return filter;
 }
 
-unsigned int lookup_bloom(unsigned char *id, void *bf)
+unsigned int lookup_bloom(unsigned char *id, unsigned int len, void *bf)
 {
 	int i;
 	uint64_t out[2];
@@ -107,22 +107,28 @@ unsigned int lookup_bloom(unsigned char *id, void *bf)
 	struct bloom_structure *filter = (struct bloom_structure *) bf;
 	// The returned values of counting_bloom_check() are 0 if found else 1
 	unsigned char matchvec[WDIST] = {1};
+	unsigned char tmp[HEXXID + 1];
 
+	memcpy(tmp, id, HEXXID);
 	// Although the paper suggests to perform parallel membership queries
-	for (i = WDIST - 1; i >= 0; i--) {
-		id[i / BYTE] = id[i / BYTE] >> (BYTE - i % BYTE) <<
-			(BYTE - i % BYTE);
-		if (!filter->flag[i])
+	for (i = len; i >= MINLENGTH; i--) {
+		tmp[i / BYTE] = tmp[i / BYTE] >> (BYTE - i % BYTE) <<
+							(BYTE - i % BYTE);
+		if (!filter->flag[i - MINLENGTH])
 			continue;
-		matchvec[i] = counting_bloom_check(filter->bloom[i], id,
+		matchvec[i - MINLENGTH] =
+		counting_bloom_check(filter->bloom[i - MINLENGTH], tmp,
 								HEXXID);
 	}
-	// Parse the matchvec in increasing order and perform hashmap searches
-	for (i = 0; i < WDIST; i++) {
-		if (matchvec[i])
+	// Parse the matchvec from longest to shortest to perform table search
+	for (i = len; i >= MINLENGTH; i--) {
+		id[i / BYTE] = id[i / BYTE] >> (BYTE - i % BYTE) <<
+							(BYTE - i % BYTE);
+		if (matchvec[i - MINLENGTH])
 			continue;
 		MurmurHash3_x64_128(id, HEXXID, SALT_CONSTANT, out);
-		if (!hashmap_get(filter->hashtable[i], id, out[1], &nexthop))
+		if (!hashmap_get(filter->hashtable[i - MINLENGTH], id, out[1],
+								&nexthop))
 			return nexthop;
 	}
 

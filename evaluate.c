@@ -68,6 +68,7 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	double error_rate = 0.05;
 	unsigned long accum = 0;
 	unsigned char xid[HEXXID + 1] = {0};
+	unsigned int len;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
@@ -79,9 +80,10 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 		tmp = gsl_rng_uniform_int(r, *size);
 		// Sample from table and set the XID in appropriate form
 		memcpy(xid, table[tmp].prefix, HEXXID);
+		len = table[tmp].len;
 		// Perform lookup
 		time_measure(&start);
-		assert(lookup_bloom(xid, filter));
+		assert(lookup_bloom(xid, len, filter));
 		time_measure(&stop);
 		accum += gettime(start, stop);
 	}
@@ -126,6 +128,7 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 				// consumed in generating the XIDs for lookups
 				low = low + NEXTSEED + 1;
 				assert(low < seedsize);
+				printf("Experiment:%d\tRun:%d\n", i, j);
 			}
 		}
 	}
@@ -160,6 +163,7 @@ int main(int argc, char *argv[])
 					nnexthops));
 		low = low + LOOPSEED;
 		assert(low < seedsize);
+		printf("Done %d\n", i);
 	}
 
 	return 0;

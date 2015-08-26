@@ -35,7 +35,7 @@ struct bloom_structure {
 
 struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate);
-unsigned int lookup_bloom(unsigned char *id, void *bf);
+unsigned int lookup_bloom(unsigned char *id, unsigned int len, void *bf);
 int bloom_destroy_fib(struct bloom_structure *filter);
 
 #endif
