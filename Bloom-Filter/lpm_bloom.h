@@ -13,8 +13,8 @@
 
 #include "bloom.h"
 #include "murmur.h"
-#include "hashmap.h"
-#include "../Data-Generation/generate_fibs.h"
+#include "generate_fibs.h"
+#include <hashit.h>
 #include <stdbool.h>
 
 #define WDIST 140
@@ -30,12 +30,13 @@ struct bloom_structure {
 	int low[WDIST];
 	int high[WDIST];
 	counting_bloom_t *bloom[WDIST];
-	struct hashmap *hashtable[WDIST];
+	hash_t hashtable[WDIST];
 };
 
 struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate);
-unsigned int lookup_bloom(unsigned char *id, unsigned int len, void *bf);
+unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
+				void *bf);
 int bloom_destroy_fib(struct bloom_structure *filter);
 
 #endif

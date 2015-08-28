@@ -8,19 +8,20 @@
 #define HEXPFIB 20
 #define NLOOKUPS 1000000
 #define RUNS 20
-#define LOOPSEED (RUNS* (NEXTSEED + 1))
+#define LOOPSEED ((RUNS) * ((NEXTSEED) + 1))
 
-static inline unsigned long gettime(struct timespec x, struct timespec y)
+static inline unsigned long gettime(const struct timespec *x,
+		const struct timespec *y)
 {
 	unsigned long tmp;
-	assert((tmp = (y.tv_sec - x.tv_sec) * 1000000000L +
-				(y.tv_nsec - x.tv_nsec)) > 0);
+	assert((tmp =
+	(y->tv_sec - x->tv_sec) * 1000000000L + (y->tv_nsec - x->tv_nsec)) > 0);
 	return tmp;
 }
 
 static int time_measure(struct timespec *ntime)
 {
-	if(clock_gettime(CLOCK_MONOTONIC, ntime) == -1) {
+	if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, ntime) == -1) {
 		perror("clock gettime");
 		exit(EXIT_FAILURE);
 	}
@@ -50,7 +51,7 @@ static int evaluate_lookups_lctrie(const void *t, const void *ts,
 		time_measure(&start);
 		// Perform lookup
 		time_measure(&stop);
-		accum += gettime(start, stop);
+		accum += gettime(&start, &stop);
 	}
 	gsl_rng_free(r);
 	return 0;
@@ -66,9 +67,10 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	int i;
 	unsigned long int tmp;
 	double error_rate = 0.05;
-	unsigned long accum = 0;
-	unsigned char xid[HEXXID + 1] = {0};
+	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 	unsigned int len;
+	unsigned long accum = 0;
+	int val;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
@@ -78,15 +80,14 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = gsl_rng_uniform_int(r, *size);
-		// Sample from table and set the XID in appropriate form
 		memcpy(xid, table[tmp].prefix, HEXXID);
 		len = table[tmp].len;
-		// Perform lookup
 		time_measure(&start);
-		assert(lookup_bloom(xid, len, filter));
+		lookup_bloom(&xid[0], len, filter);
 		time_measure(&stop);
-		accum += gettime(start, stop);
+		accum += gettime(&start, &stop);
 	}
+	free(xid);
 	gsl_rng_free(r);
 	bloom_destroy_fib(filter);
 	return 0;
@@ -128,7 +129,6 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 				// consumed in generating the XIDs for lookups
 				low = low + NEXTSEED + 1;
 				assert(low < seedsize);
-				printf("Experiment:%d\tRun:%d\n", i, j);
 			}
 		}
 	}
@@ -163,7 +163,6 @@ int main(int argc, char *argv[])
 					nnexthops));
 		low = low + LOOPSEED;
 		assert(low < seedsize);
-		printf("Done %d\n", i);
 	}
 
 	return 0;

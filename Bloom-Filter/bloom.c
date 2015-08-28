@@ -36,7 +36,6 @@
 #include <errno.h>
 #include "murmur.h"
 #include "bloom.h"
-#include "hashmap.h"
 
 #define SALT_CONSTANT 0x97c29b3a
 
@@ -163,7 +162,7 @@ int bitmap_check(bitmap_t *bitmap, unsigned int index, long offset)
  * See paper by Kirsch, Mitzenmacher [2006]
  * http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
  */
-static uint64_t hash_func(counting_bloom_t *bloom, const char *key,
+void hash_func(counting_bloom_t *bloom, const char *key,
 		size_t key_len, uint32_t *hashes)
 {
 	int i;
@@ -175,9 +174,6 @@ static uint64_t hash_func(counting_bloom_t *bloom, const char *key,
 
 	for (i = 0; i < bloom->nfuncs; i++)
 		hashes[i] = (h1 + i * h2) % bloom->counts_per_func;
-	// Add the hash to hashmap
-	// This is to avoid the redundancy in computing hashes twice
-	return (((uint64_t) checksum[2]) << 32 | checksum[3]);
 }
 
 int free_counting_bloom(counting_bloom_t *bloom)
@@ -228,13 +224,12 @@ counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate)
 	return cur_bloom;
 }
 
-int counting_bloom_add(counting_bloom_t *bloom, struct hashmap *hmap,
-		const char *s, size_t len, unsigned int nexthop)
+int counting_bloom_add(counting_bloom_t *bloom, const char *s, size_t len)
 {
 	unsigned int index, i, offset;
 	unsigned int *hashes = bloom->hashes;
 
-	uint64_t out = hash_func(bloom, s, len, hashes);
+	hash_func(bloom, s, len, hashes);
 
 	for (i = 0; i < bloom->nfuncs; i++) {
 		offset = i * bloom->counts_per_func;
@@ -242,25 +237,22 @@ int counting_bloom_add(counting_bloom_t *bloom, struct hashmap *hmap,
 		bitmap_increment(bloom->bitmap, index, bloom->offset);
 	}
 	bloom->header->count++;
-	hashmap_put(hmap, s, nexthop, out);
 
 	return 0;
 }
 
-int counting_bloom_remove(counting_bloom_t *bloom, struct hashmap *hmap,
-		const char *s, size_t len)
+int counting_bloom_remove(counting_bloom_t *bloom, const char *s, size_t len)
 {
 	unsigned int index, i, offset;
 	unsigned int *hashes = bloom->hashes;
 
-	uint64_t out = hash_func(bloom, s, len, hashes);
+	hash_func(bloom, s, len, hashes);
 	for (i = 0; i < bloom->nfuncs; i++) {
 		offset = i * bloom->counts_per_func;
 		index = hashes[i] + offset;
 		bitmap_decrement(bloom->bitmap, index, bloom->offset);
 	}
 	bloom->header->count--;
-	hashmap_delete(hmap, s, out);
 
 	return 0;
 }

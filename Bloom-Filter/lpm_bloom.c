@@ -1,6 +1,12 @@
 #include "lpm_bloom.h"
 
-#define SALT_CONSTANT 0x97c29b3a
+static int comparekeys(void *key1, void *key2)
+{
+	unsigned char *k1 = (unsigned char *) key1;
+	unsigned char *k2 = (unsigned char *) key2;
+
+	return memcmp(k1, k2, HEXXID);
+}
 
 static int sortbylength(const void *e1, const void *e2)
 {
@@ -48,9 +54,9 @@ int bloom_destroy_fib(struct bloom_structure *filter)
 	int i;
 
 	for (i = 0; i < WDIST; i++) {
-		if (filter->flag) {
+		if (filter->flag[i]) {
 			free_counting_bloom(filter->bloom[i]);
-			hashmap_destroy(filter->hashtable[i]);
+			hashit_destroy(filter->hashtable[i]);
 		}
 	}
 	free(filter);
@@ -65,6 +71,7 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 	unsigned char xid[HEXXID + 1] = {0};
 	struct nextcreate **tmp_table = NULL;
 	struct bloom_structure *filter = NULL;
+	hash_t tmp_hashmap = NULL;
 
 	filter = calloc(1, sizeof(struct bloom_structure));
 	assert(filter);
@@ -78,7 +85,7 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 
 	qsort(tmp_table, size, sizeof(struct nextcreate *), sortbylength);
 	bloom_proportion(filter, tmp_table, size);
-
+	
 	for (i = 0; i < WDIST; i++) {
 		if (!filter->flag[i])
 			continue;
@@ -87,49 +94,53 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 			printf("ERROR: Could not create bloom filter\n");
 			return NULL;
 		}
-		assert(0 == hashmap_init(filter->length[i], &filter->hashtable[i]));
+		tmp_hashmap = hashit_create(filter->length[i], HEXXID, NULL,
+							comparekeys, CHAIN_H);
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
-			memcpy(xid, tmp_table[j]->prefix, HEXXID);
-			assert(0 == counting_bloom_add(filter->bloom[i],
-				filter->hashtable[i], xid, HEXXID,
-				tmp_table[j]->nexthop));
+			assert(0 ==
+			counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
+			assert(0 ==
+			hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)));
 		}
+		filter->hashtable[i] = tmp_hashmap;
 	}
-
+	free(tmp_table);
 	return filter;
 }
 
-unsigned int lookup_bloom(unsigned char *id, unsigned int len, void *bf)
+unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
+		void *bf)
 {
 	int i;
-	uint64_t out[2];
-	unsigned int nexthop;
 	struct bloom_structure *filter = (struct bloom_structure *) bf;
+	unsigned int *nexthop = NULL;
 	// The returned values of counting_bloom_check() are 0 if found else 1
 	unsigned char matchvec[WDIST] = {1};
-	unsigned char tmp[HEXXID + 1];
+	unsigned char tmp1[HEXXID + 1] = {0};
+	unsigned char tmp2[HEXXID] = {0};
 
-	memcpy(tmp, id, HEXXID);
+	memcpy(tmp1, id, HEXXID);
+	memcpy(tmp2, tmp2, HEXXID);
 	// Although the paper suggests to perform parallel membership queries
 	for (i = len; i >= MINLENGTH; i--) {
-		tmp[i / BYTE] = tmp[i / BYTE] >> (BYTE - i % BYTE) <<
+		tmp1[i / BYTE] = tmp1[i / BYTE] >> (BYTE - i % BYTE) <<
 							(BYTE - i % BYTE);
 		if (!filter->flag[i - MINLENGTH])
 			continue;
 		matchvec[i - MINLENGTH] =
-		counting_bloom_check(filter->bloom[i - MINLENGTH], tmp,
+		counting_bloom_check(filter->bloom[i - MINLENGTH], tmp1,
 								HEXXID);
 	}
 	// Parse the matchvec from longest to shortest to perform table search
 	for (i = len; i >= MINLENGTH; i--) {
-		id[i / BYTE] = id[i / BYTE] >> (BYTE - i % BYTE) <<
+		tmp2[i / BYTE] = tmp2[i / BYTE] >> (BYTE - i % BYTE) <<
 							(BYTE - i % BYTE);
-		if (matchvec[i - MINLENGTH])
+		if (matchvec[i - MINLENGTH] || !filter->flag[i - MINLENGTH])
 			continue;
-		MurmurHash3_x64_128(id, HEXXID, SALT_CONSTANT, out);
-		if (!hashmap_get(filter->hashtable[i - MINLENGTH], id, out[1],
-								&nexthop))
-			return nexthop;
+		nexthop = hashit_lookup(filter->hashtable[i - MINLENGTH],
+					tmp2);
+		if (nexthop)
+			return *nexthop;
 	}
 
 	return 0;
