@@ -26,7 +26,7 @@
 
 
 /* Return a nexthop or 0 if not found */
-nexthop_t find(xid s, routtable_t t)
+unsigned int find(const xid *s, routtable_t t)
 {
 	int i,val;
 	node_t node;
@@ -42,9 +42,8 @@ nexthop_t find(xid s, routtable_t t)
 	pos = (unsigned char) GETSKIP(node);
 	branch = (unsigned char) GETBRANCH(node);
 	adr = (uint32_t) GETADR(node);
-	while (branch != 0)
-	{
-		tmp_node = extract(pos, branch, s);
+	while (branch != 0) {
+		tmp_node = extract(pos, branch, *s);
 		next_jump = xidtounsigned(&tmp_node);
 		node = t->trie[adr + next_jump];
 		pos += branch + GETSKIP(node);
@@ -53,13 +52,12 @@ nexthop_t find(xid s, routtable_t t)
 	}
 
 	/* Was this a hit? */
-	for (i=0;i<20;i++)
-		bitmask->w[i] = (t->base[adr].str).w[i] ^ s.w[i];
+	for (i = 0; i < 20; i++)
+		bitmask->w[i] = (t->base[adr].str).w[i] ^ s->w[i];
 	*bitmask = extract(0, t->base[adr].len, *bitmask);
 	memset(tmp, 0, 20);
 	val = comparexid(&bitmask, &tmp);
-	if (0 == val)
-	{
+	if (0 == val) {
 		free(bitmask);
 		free(tmp);
 		return t->nexthop[t->base[adr].nexthop];
@@ -67,12 +65,10 @@ nexthop_t find(xid s, routtable_t t)
 
 	/* If not, look in the prefix tree */
 	preadr = t->base[adr].pre;
-	while (preadr != NOPRE)
-	{
+	while (preadr != NOPRE) {
 		*bitmask = extract(0, t->pre[preadr].len, *bitmask);
 		val = comparexid(&bitmask, &tmp);
-		if (0 == val)
-		{
+		if (0 == val) {
 			free(bitmask);
 			free(tmp);
 			return t->nexthop[t->pre[preadr].nexthop];
@@ -80,5 +76,5 @@ nexthop_t find(xid s, routtable_t t)
 		preadr = t->pre[preadr].pre;
 	}
 
-	return *tmp; /* Not found */
+	return 0; //Not found
 }

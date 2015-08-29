@@ -1,14 +1,14 @@
-#include "generate_fibs.h"
-#include "lpm_bloom.h"
+#include "../Data-Generation/generate_fibs.h"
 #include "lc_trie.h"
 #include <fcntl.h>
 #include <time.h>
+#include <inttypes.h>
 
 #define LEXPFIB 4
 #define HEXPFIB 20
 #define NLOOKUPS 1000000
 #define RUNS 20
-#define LOOPSEED ((RUNS) * ((NEXTSEED) + 1))
+#define LOOPSEED ((RUNS) * (NEXTSEED + 1))
 
 static inline unsigned long gettime(const struct timespec *x,
 		const struct timespec *y)
@@ -21,7 +21,7 @@ static inline unsigned long gettime(const struct timespec *x,
 
 static int time_measure(struct timespec *ntime)
 {
-	if(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, ntime) == -1) {
+	if(clock_gettime(CLOCK_MONOTONIC, ntime) == -1) {
 		perror("clock gettime");
 		exit(EXIT_FAILURE);
 	}
@@ -30,7 +30,7 @@ static int time_measure(struct timespec *ntime)
 }
 
 static int evaluate_lookups_lctrie(const void *t, const void *ts,
-		const void *s)
+		const void *s, FILE *fp)
 {
 	struct timespec start, stop;
 	struct nextcreate *table = (struct nextcreate *) t;
@@ -38,71 +38,47 @@ static int evaluate_lookups_lctrie(const void *t, const void *ts,
 	uint32_t *seed = (uint32_t *) s;
 	unsigned long int tmp;
 	unsigned long accum = 0;
-	int i;
+	int i, j;
 	gsl_rng *r;
+	xid *id = NULL;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
 	gsl_rng_set(r, *seed);
 
 	// Create the data structure
-	for (i = 0; i < NLOOKUPS; i++) {
+	struct routtablerec *fib = lctrie_create_fib(table, *size);
+	return 0;
+	node_t *trie = fib->trie;
+	for (j = 0; j < fib->triesize; j++)
+		fprintf(fp, "%"PRIu64"\n", GETBRANCH(trie[j]));
+/*	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = gsl_rng_uniform_int(r, *size);
 		// Sample from table and set the XID in appropriate form
+		id = (xid *) &(table[tmp].prefix);
 		time_measure(&start);
 		// Perform lookup
+		lctrie_lookup(id, fib);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
+	printf("%lu\t%d\t", accum, i);*/
+	assert(!lctrie_destroy_fib(fib));
 	gsl_rng_free(r);
-	return 0;
-}
-
-static int evaluate_lookups_bloom(const void *t, const void *ts,
-		const void *s)
-{
-	struct timespec start, stop;
-	struct nextcreate *table = (struct nextcreate *) t;
-	unsigned long *size = (unsigned long *) ts;
-	uint32_t *seed = (uint32_t *) s;
-	int i;
-	unsigned long int tmp;
-	double error_rate = 0.05;
-	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
-	unsigned int len;
-	unsigned long accum = 0;
-	int val;
-	gsl_rng *r;
-
-	r = gsl_rng_alloc(gsl_rng_ranlux);
-	gsl_rng_set(r, *seed);
-
-	// Create the data structure
-	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
-	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = gsl_rng_uniform_int(r, *size);
-		memcpy(xid, table[tmp].prefix, HEXXID);
-		len = table[tmp].len;
-		time_measure(&start);
-		lookup_bloom(&xid[0], len, filter);
-		time_measure(&stop);
-		accum += gettime(&start, &stop);
-	}
-	free(xid);
-	gsl_rng_free(r);
-	bloom_destroy_fib(filter);
 	return 0;
 }
 
 static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 		int nnexthops)
 {
-	int i, j;
+	int i, j, k, l;
 	pid_t id;
 	unsigned long size = 1 << exp;
 	struct nextcreate *table = NULL;
+	char file_name[20] = {0};
+	unsigned char tmp_prefix[HEXXID] = {0};
+	FILE *fp , *tmp_file;
 	int o_seed = low;
-	int (*experiments[])(const void *, const void *, const void *) = {
-		evaluate_lookups_bloom,
+	int (*experiments[])(const void *, const void *, const void *, FILE *) = {
 		evaluate_lookups_lctrie,
 		NULL,
 	};
@@ -119,9 +95,22 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 							seedsize, nnexthops));
 				low = low + NEXTSEED;
 				assert(low < seedsize);
+/*				sprintf(file_name, "%d.table", j);
+				tmp_file = fopen(file_name, "w+");
+				for (k = 0; k < size; k++) {
+					memcpy(tmp_prefix, table[k].prefix, HEXXID);
+					for (l = 0; l < HEXXID; l++)
+						fprintf(tmp_file, "%02x", tmp_prefix[l]);
+					fprintf(tmp_file, " %d %d\n", table[k].len, table[k].nexthop);
+				}
+				fclose(tmp_file);
+				memset(file_name, 0, HEXXID);
+				sprintf(file_name, "%d.4", j);
+				fp = fopen(file_name, "w+");*/
 				assert(0 == (experiments[i])
-						(table, &size, &seeds[low]));
+						(table, &size, &seeds[low], fp));
 				free(table);
+				fclose(fp);
 				exit(EXIT_SUCCESS);
 			} else {
 				assert(wait(NULL) >= 0);
@@ -129,6 +118,7 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 				// consumed in generating the XIDs for lookups
 				low = low + NEXTSEED + 1;
 				assert(low < seedsize);
+				printf("Experiment:%d\tRun:%d\n", i, j);
 			}
 		}
 	}
@@ -163,7 +153,9 @@ int main(int argc, char *argv[])
 					nnexthops));
 		low = low + LOOPSEED;
 		assert(low < seedsize);
+		printf("Done %d\n", i);
 	}
+	free(seeds);
 
 	return 0;
 }

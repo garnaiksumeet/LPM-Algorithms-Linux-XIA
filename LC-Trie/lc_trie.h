@@ -34,7 +34,7 @@
 #include <math.h>
 #include <float.h>
 #include <stdint.h>
-#include "../Data-Generation/generate_fibs.h"
+#include "generate_fibs.h"
 
 
 #define ADRSIZE 160       /* the number of bits in an address */
@@ -48,13 +48,9 @@ typedef word node_t;
 #define NOPRE -1          /* an empty prefix pointer */
 #define NOBASE -1
 
-#define GETBRANCH(node)		((node)<<16>>56)
-#define GETSKIP(node)		((node)<<24>>56)
-#define GETADR(node)		((node)<<32>>32)
-
-/* A next-hop table entry is a 160 bit string */
-
-typedef xid nexthop_t;
+#define GETBRANCH(node)		((node) << 16 >> 56)
+#define GETSKIP(node)		((node) << 24 >> 56)
+#define GETADR(node)		((node) << 32 >> 32)
 
 /* The routing table entries are initially stored in
    a simple array */
@@ -64,7 +60,7 @@ struct entryrec
 {
 	xid data;          /* the routing entry */
 	int len;            /* and its length */
-	nexthop_t nexthop;  /* the corresponding next-hop */
+	unsigned int nexthop;  /* the corresponding next-hop */
 	int pre;            /* this auxiliary variable is used in the */
 };                    /* construction of the final data structure */
 
@@ -118,7 +114,7 @@ struct routtablerec
 	int basesize;
 	comp_pre_t *pre;      /* the prefix vector */
 	int presize;
-	nexthop_t *nexthop;   /* the next-hop table */
+	unsigned int *nexthop;   /* the next-hop table */
 	int nexthopsize;
 };
 
@@ -167,6 +163,8 @@ struct routtablerec *lctrie_create_fib(struct nextcreate *table,
 
 int lctrie_destroy_fib(struct routtablerec *rtable);
 
+unsigned int lctrie_lookup(const xid *id, routtable_t table);
+
 /* 
  * Extract the 32 LSBs and cast to uint32_t
  */
@@ -179,6 +177,6 @@ uint32_t xidtounsigned(xid *bitpat);
 int comparexid(const void *id1, const void *id2);
 
 /* Perform a lookup. */
-nexthop_t find(xid s, routtable_t t);
+unsigned int find(const xid *s, routtable_t t);
 
 #endif // _LC_TRIE_H_
