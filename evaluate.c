@@ -3,12 +3,20 @@
 #include "lc_trie.h"
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #define LEXPFIB 4
 #define HEXPFIB 20
 #define NLOOKUPS 1000000
 #define RUNS 20
 #define LOOPSEED ((RUNS) * ((NEXTSEED) + 1))
+#define LOOKUPFILEBLOOM "bloom_lookup_measurements"
+
+static unsigned long int sampleindex(gsl_rng *r, unsigned long max)
+{
+	return gsl_rng_uniform_int(r, max);
+}
 
 static inline unsigned long gettime(const struct timespec *x,
 		const struct timespec *y)
@@ -46,7 +54,7 @@ static int evaluate_lookups_lctrie(const void *t, const void *ts,
 
 	// Create the data structure
 	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = gsl_rng_uniform_int(r, *size);
+		tmp = sampleindex(r, *size);
 		// Sample from table and set the XID in appropriate form
 		time_measure(&start);
 		// Perform lookup
@@ -66,6 +74,7 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	uint32_t *seed = (uint32_t *) s;
 	int i;
 	unsigned long int tmp;
+	FILE *fp = NULL;
 	double error_rate = 0.05;
 	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 	unsigned int len;
@@ -76,10 +85,11 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	r = gsl_rng_alloc(gsl_rng_ranlux);
 	gsl_rng_set(r, *seed);
 
+	setpriority(PRIO_PROCESS, 0, -20);
 	// Create the data structure
 	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = gsl_rng_uniform_int(r, *size);
+		tmp = sampleindex(r, *size);
 		memcpy(xid, table[tmp].prefix, HEXXID);
 		len = table[tmp].len;
 		time_measure(&start);
@@ -89,6 +99,9 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	}
 	free(xid);
 	gsl_rng_free(r);
+	fp = fopen(LOOKUPFILEBLOOM, "a");
+	fprintf(fp, "%lu\t%lu\n", *size, accum);
+	fclose(fp);
 	bloom_destroy_fib(filter);
 	return 0;
 }
