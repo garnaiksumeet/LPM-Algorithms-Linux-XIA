@@ -10,8 +10,15 @@
 #define HEXPFIB 20
 #define NLOOKUPS 1000000
 #define RUNS 20
+#define BLOOMERRORRATE 0.05
+#define MINNEXTHOPS 16
+#define MAXNEXTHOPS 256
+#define NEXTHOPJUMP 16
 #define LOOPSEED ((RUNS) * ((NEXTSEED) + 1))
 #define LOOKUPFILEBLOOM "bloom_lookup_measurements"
+#define LOOKUPFILERADIX "radix_lookup_measurements"
+#define NEXTHOPSFILERADIX "radix_nexthops_measurements"
+#define NEXTHOPSFILEBLOOM "bloom_nexthops_measurements"
 
 static unsigned long int sampleindex(gsl_rng *r, unsigned long max)
 {
@@ -34,6 +41,151 @@ static int time_measure(struct timespec *ntime)
 		exit(EXIT_FAILURE);
 	}
 
+	return 0;
+}
+
+static int evaluate_nexthops_radix(const void *t, const void *ts,
+		const void *nh, const void *s)
+{
+	struct timespec start, stop;
+	struct nextcreate *table = (struct nextcreate *) t;
+	unsigned long *size = (unsigned long *) ts;
+	uint32_t *seed = (uint32_t *) s;
+	int *nnexthops = (int *) nh;
+	unsigned long int tmp;
+	unsigned long accum = 0;
+	int i;
+	gsl_rng *r;
+
+	r = gsl_rng_alloc(gsl_rng_ranlux);
+	gsl_rng_set(r, *seed);
+
+	// Create the data structure
+	for (i = 0; i < NLOOKUPS; i++) {
+		tmp = sampleindex(r, *size);
+		// Sample from table and set the XID in appropriate form
+		time_measure(&start);
+		// Perform lookup
+		time_measure(&stop);
+		accum += gettime(&start, &stop);
+	}
+	gsl_rng_free(r);
+	return 0;
+}
+
+static int evaluate_nexthops_bloom(const void *t, const void *ts,
+		const void *nh, const void *s)
+{
+	struct timespec start, stop;
+	struct nextcreate *table = (struct nextcreate *) t;
+	unsigned long *size = (unsigned long *) ts;
+	uint32_t *seed = (uint32_t *) s;
+	int *nnexthops = (int *) nh;
+	int i;
+	unsigned long int tmp;
+	FILE *fp = NULL;
+	double error_rate = BLOOMERRORRATE;
+	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
+	unsigned int len;
+	unsigned long accum = 0;
+	int val;
+	gsl_rng *r;
+
+	r = gsl_rng_alloc(gsl_rng_ranlux);
+	gsl_rng_set(r, *seed);
+
+	setpriority(PRIO_PROCESS, 0, -20);
+	// Create the data structure
+	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
+	for (i = 0; i < NLOOKUPS; i++) {
+		tmp = sampleindex(r, *size);
+		memcpy(xid, table[tmp].prefix, HEXXID);
+		len = table[tmp].len;
+		time_measure(&start);
+		lookup_bloom(&xid[0], len, filter);
+		time_measure(&stop);
+		accum += gettime(&start, &stop);
+	}
+	free(xid);
+	gsl_rng_free(r);
+	fp = fopen(NEXTHOPSFILEBLOOM, "a");
+	fprintf(fp, "%d\t%lu\n", *nnexthops, accum);
+	fclose(fp);
+	bloom_destroy_fib(filter);
+	return 0;
+}
+
+static int nexthops_experiments(int exp, uint32_t *seeds, int low,
+		int seedsize)
+{
+	int i, j, k;
+	pid_t id;
+	unsigned long size = 1 << exp;
+	struct nextcreate *table = NULL;
+	int nnexthops;
+	int o_seed = low;
+	int (*experiments[])(const void *, const void *, const void *, const void *) = {
+		evaluate_nexthops_bloom,
+		evaluate_nexthops_radix,
+		NULL,
+	};
+
+	for (i = 0; experiments[i] != NULL;  i++) {
+		low = o_seed;
+		for (j = MINNEXTHOPS; j <= MAXNEXTHOPS; j += NEXTHOPJUMP) {
+			nnexthops = j;
+			for (k = 0; k < RUNS; k++) {
+				id = fork();
+				assert(id >= 0);
+				if (0 == id) {
+					table = malloc(sizeof(struct nextcreate)
+							* size);
+					assert(0 ==
+					table_dist(exp, seeds, low, table, seedsize, nnexthops));
+					low = low + NEXTSEED;
+					assert(low < seedsize);
+					assert(0 ==
+					(experiments[i])(table, &size, &nnexthops, &seeds[low]));
+					free(table);
+					exit(EXIT_SUCCESS);
+				} else {
+					assert(wait(NULL) >= 0);
+					// The extra 1 is to account for the seed
+					// consumed in generating the XIDs for lookups
+					low = low + NEXTSEED + 1;
+					assert(low < seedsize);
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+static int evaluate_lookups_radix(const void *t, const void *ts,
+		const void *s)
+{
+	struct timespec start, stop;
+	struct nextcreate *table = (struct nextcreate *) t;
+	unsigned long *size = (unsigned long *) ts;
+	uint32_t *seed = (uint32_t *) s;
+	unsigned long int tmp;
+	unsigned long accum = 0;
+	int i;
+	gsl_rng *r;
+
+	r = gsl_rng_alloc(gsl_rng_ranlux);
+	gsl_rng_set(r, *seed);
+
+	// Create the data structure
+	for (i = 0; i < NLOOKUPS; i++) {
+		tmp = sampleindex(r, *size);
+		// Sample from table and set the XID in appropriate form
+		time_measure(&start);
+		// Perform lookup
+		time_measure(&stop);
+		accum += gettime(&start, &stop);
+	}
+	gsl_rng_free(r);
 	return 0;
 }
 
@@ -75,7 +227,7 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	int i;
 	unsigned long int tmp;
 	FILE *fp = NULL;
-	double error_rate = 0.05;
+	double error_rate = BLOOMERRORRATE;
 	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 	unsigned int len;
 	unsigned long accum = 0;
@@ -117,6 +269,7 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 	int (*experiments[])(const void *, const void *, const void *) = {
 		evaluate_lookups_bloom,
 		evaluate_lookups_lctrie,
+		evaluate_lookups_radix,
 		NULL,
 	};
 
@@ -171,9 +324,14 @@ int main(int argc, char *argv[])
 
 	for (i = LEXPFIB; i <= HEXPFIB; i++) {
 		size = 1 << i;
-		nnexthops = 16; // For the time being we assume a constant
+		// This is taken as a constant for the number of 
+		nnexthops = 16;
 		assert(0 == lookup_experiments(i, seeds, low, seedsize,
 					nnexthops));
+		if (HEXPFIB == i)
+			assert(0 ==
+			nexthops_experiments(i, seeds, low, seedsize));
+		
 		low = low + LOOPSEED;
 		assert(low < seedsize);
 	}
