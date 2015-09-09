@@ -212,7 +212,6 @@ struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
 	struct prerec **p = NULL;
 	struct prerec *ptemp = NULL;
 
-	node_t *trie = NULL;
 	struct baserec *base = NULL;
 	struct prerec *pre = NULL;
 	
@@ -267,15 +266,13 @@ struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
 	}
 	struct node_patric *root = NULL;
 	root = buildpatricia(b, 0, 0, nbases);
-	int nnodes = count_pat_nodes(root);
 
 	//At this point we now how much memory to allocate
-	trie = malloc(nnodes * sizeof(node_t));
 	base = malloc(nbases * sizeof(struct baserec));
 	pre = malloc(nprefs * sizeof(struct prerec));
 
 	for (i = 0; i < nbases; i++) {
-		base[i].str = b[i]->str;
+		memcpy(&base[i].str, &(b[i]->str), HEXXID);
 		base[i].len = b[i]->len;
 		base[i].pre = b[i]->pre;
 		base[i].nexthop = b[i]->nexthop;

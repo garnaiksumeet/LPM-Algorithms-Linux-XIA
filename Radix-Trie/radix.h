@@ -14,26 +14,19 @@
 #include <stdint.h>
 #include "../Data-Generation/generate_fibs.h"
 
+#undef BYTE
+#define BYTE 8
 
 #define ADRSIZE 160       /* the number of bits in an address */
 
 typedef struct xid { unsigned char w[20]; } xid;
 typedef xid *list;
 
-typedef uint64_t word;
-typedef word node_t;
-
 #define NOPRE -1          /* an empty prefix pointer */
 #define NOBASE -1
 
-#define GETBRANCH(node)		((node) << 16 >> 56)
-#define GETSKIP(node)		((node) << 24 >> 56)
-#define GETADR(node)		((node) << 32 >> 32)
-
 /* The routing table entries are initially stored in
    a simple array */
-
-//typedef struct entryrec *entry_t;
 struct entryrec
 {
 	xid data;          /* the routing entry */
@@ -43,8 +36,6 @@ struct entryrec
 };                    /* construction of the final data structure */
 
 /* base vector */
-
-//typedef struct baserec *base_t;
 struct baserec
 {
 	xid str;    /* the routing entry */
@@ -54,8 +45,6 @@ struct baserec
 };
 
 /* prefix vector */
-
-//typedef struct prerec *pre_t;
 struct prerec
 {
 	int len;     /* the length of the prefix */
@@ -67,7 +56,6 @@ struct prerec
  * The complete routing table data structure consists of a trie, a base vector,
  * a prefix vector, and a next-hop table.
  */
-//typedef struct routtablerec *routtable_t;
 struct routtablerec
 {
 	struct node_patric *root;
@@ -82,7 +70,6 @@ struct routtablerec
 /*
  * The structure of each node for building the path compressed trie from XIDs
  */
-//typedef struct node_patric node_patric;
 struct node_patric
 {
 	int skip;

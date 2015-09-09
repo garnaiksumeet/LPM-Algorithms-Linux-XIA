@@ -1,6 +1,6 @@
 #include "generate_fibs.h"
 #include "lpm_bloom.h"
-#include "lc_trie.h"
+#include "lpm_radix.h"
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
@@ -51,25 +51,34 @@ static int evaluate_nexthops_radix(const void *t, const void *ts,
 	struct nextcreate *table = (struct nextcreate *) t;
 	unsigned long *size = (unsigned long *) ts;
 	uint32_t *seed = (uint32_t *) s;
+	FILE *fp = NULL;
 	int *nnexthops = (int *) nh;
 	unsigned long int tmp;
 	unsigned long accum = 0;
 	int i;
+	xid *id = NULL;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
 	gsl_rng_set(r, *seed);
 
+	setpriority(PRIO_PROCESS, 0, -20);
 	// Create the data structure
+	struct routtablerec *fib = radix_create_fib(table, *size);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = sampleindex(r, *size);
+		id = (xid *) &(table[tmp].prefix);
 		// Sample from table and set the XID in appropriate form
 		time_measure(&start);
-		// Perform lookup
+		lookup_radix(id, fib);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
 	gsl_rng_free(r);
+	fp = fopen(NEXTHOPSFILERADIX, "a");
+	fprintf(fp, "%d\t%lu\n", *nnexthops, accum);
+	fclose(fp);
+	radix_destroy_fib(fib);
 	return 0;
 }
 
@@ -85,7 +94,7 @@ static int evaluate_nexthops_bloom(const void *t, const void *ts,
 	unsigned long int tmp;
 	FILE *fp = NULL;
 	double error_rate = BLOOMERRORRATE;
-	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
+	unsigned char (*id)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 	unsigned int len;
 	unsigned long accum = 0;
 	int val;
@@ -99,14 +108,14 @@ static int evaluate_nexthops_bloom(const void *t, const void *ts,
 	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = sampleindex(r, *size);
-		memcpy(xid, table[tmp].prefix, HEXXID);
+		memcpy(id, table[tmp].prefix, HEXXID);
 		len = table[tmp].len;
 		time_measure(&start);
-		lookup_bloom(&xid[0], len, filter);
+		lookup_bloom(&id[0], len, filter);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
-	free(xid);
+	free(id);
 	gsl_rng_free(r);
 	fp = fopen(NEXTHOPSFILEBLOOM, "a");
 	fprintf(fp, "%d\t%lu\n", *nnexthops, accum);
@@ -168,24 +177,33 @@ static int evaluate_lookups_radix(const void *t, const void *ts,
 	struct nextcreate *table = (struct nextcreate *) t;
 	unsigned long *size = (unsigned long *) ts;
 	uint32_t *seed = (uint32_t *) s;
+	FILE *fp = NULL;
 	unsigned long int tmp;
 	unsigned long accum = 0;
 	int i;
+	xid *id = NULL;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
 	gsl_rng_set(r, *seed);
 
+	setpriority(PRIO_PROCESS, 0, -20);
 	// Create the data structure
+	struct routtablerec *fib = radix_create_fib(table, *size);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = sampleindex(r, *size);
+		id = (xid *) &(table[tmp].prefix);
 		// Sample from table and set the XID in appropriate form
 		time_measure(&start);
-		// Perform lookup
+		lookup_radix(id, fib);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
 	gsl_rng_free(r);
+	fp = fopen(LOOKUPFILERADIX, "a");
+	fprintf(fp, "%lu\t%lu\n", *size, accum);
+	fclose(fp);
+	radix_destroy_fib(fib);
 	return 0;
 }
 
@@ -228,10 +246,9 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	unsigned long int tmp;
 	FILE *fp = NULL;
 	double error_rate = BLOOMERRORRATE;
-	unsigned char (*xid)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
+	unsigned char (*id)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 	unsigned int len;
 	unsigned long accum = 0;
-	int val;
 	gsl_rng *r;
 
 	r = gsl_rng_alloc(gsl_rng_ranlux);
@@ -242,14 +259,14 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = sampleindex(r, *size);
-		memcpy(xid, table[tmp].prefix, HEXXID);
+		memcpy(id, table[tmp].prefix, HEXXID);
 		len = table[tmp].len;
 		time_measure(&start);
-		lookup_bloom(&xid[0], len, filter);
+		lookup_bloom(&id[0], len, filter);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
-	free(xid);
+	free(id);
 	gsl_rng_free(r);
 	fp = fopen(LOOKUPFILEBLOOM, "a");
 	fprintf(fp, "%lu\t%lu\n", *size, accum);

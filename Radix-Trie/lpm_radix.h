@@ -12,7 +12,6 @@
 #define __LPM_RADIX_H__
 
 #include "radix.h"
-#include "xidsort.h"
 #include "../Data-Generation/generate_fibs.h"
 
 #define MINLENGTH 20

@@ -26,7 +26,7 @@ struct routtablerec *radix_create_fib(struct nextcreate *table,
 	struct entryrec **entry = malloc(size * sizeof(struct entryrec *));
 	int nentries;
 	int i;
-	struct routtablerec *fib;
+	struct routtablerec *fib = NULL;
 
 	struct entryrec *tmp_entry = calloc(size, sizeof(struct entryrec));
 	for (i = 0; i < size; i++)
