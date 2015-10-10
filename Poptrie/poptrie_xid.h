@@ -1,26 +1,22 @@
 /*_
  * Copyright (c) 2014-2015 Hirochika Asai <asai@jar.jp>
  * All rights reserved.
- *
- * Modified for Linux-XIA, 2015
- * Garnaik Sumeet, Michel Machado 
  */
 
-#ifndef _POPTRIE_XIA_H
-#define _POPTRIE_XIA_H
+#ifndef _POPTRIE_XID_H
+#define _POPTRIE_XID_H
 
 #include <stdint.h>
-#include "../Data-Generation/generate_fibs.h"
 
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
-typedef struct XID {unsigned char w[HEXXID];} XID;
+typedef struct XID {unsigned char w[20];} XID;
 
 
-#define POPTRIE_S 18
-#define POPTRIE_INIT_FIB_SIZE 4096
+#define POPTRIE_S	18
+#define POPTRIE_INIT_FIB_SIZE	4096
 
 #define popcnt(v)	__builtin_popcountll(v)
 
@@ -94,15 +90,20 @@ struct poptrie {
 	int _allocated;
 };
 
-/* in poptrie_xia.c */
+/* in poptrie.c */
 struct poptrie * poptrie_init(struct poptrie *, int, int);
 void poptrie_release(struct poptrie *);
-void * poptrie_lookup(struct poptrie *, XID);
 int poptrie_route_add(struct poptrie *, XID, int, void *);
+//int poptrie_route_change(struct poptrie *, u32, int, void *);
+//int poptrie_route_update(struct poptrie *, u32, int, void *);
+//int poptrie_route_del(struct poptrie *, u64, int);
+void * poptrie_lookup(struct poptrie *, XID);
 void * poptrie_rib_lookup(struct poptrie *, XID);
 
 /* in xid_operations.c*/
 XID extractXID(int pos, int length, XID data);
 uint32_t XIDtounsigned(XID *bitpat);
+XID shift_left(XID id, int shift);
+XID shift_right(XID id, int shift);
 
 #endif

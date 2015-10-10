@@ -3,8 +3,8 @@
  * All rights reserved.
  */
 
-#include "buddy.h"
-#include "poptrie_xia.h"
+#include "buddy_xid.h"
+#include "poptrie_xid.h"
 #include <stdlib.h>
 #include <string.h>
 

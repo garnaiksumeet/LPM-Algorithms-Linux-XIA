@@ -1,9 +1,10 @@
-#include "poptrie_xia.h"
+#include "poptrie_xid.h"
+#include <string.h>
 
 /*
  * Bitwise shift left an XID by shift bits and return that shifted XID
  */
-static XID shift_left(XID id, int shift)
+XID shift_left(XID id, int shift)
 {
 	int byte_s = 0;
 	int bit_s = 0;
@@ -38,7 +39,7 @@ static XID shift_left(XID id, int shift)
 /*
  * Bitwise shift right an XID by shift bits and return that shifted XID
  */
-static XID shift_right(XID id, int shift)
+XID shift_right(XID id, int shift)
 {
 	int byte_s = 0;
 	int bit_s = 0;
@@ -87,7 +88,7 @@ XID extractXID(int pos, int length, XID data)
 /*
  * Remove "bits" bits from data
  */
-XID removexid(int bits, XID data)
+XID removeXID(int bits, XID data)
 {
 	int i;
 	XID tmp;
@@ -102,7 +103,7 @@ XID removexid(int bits, XID data)
  * id1 < id2 : return -1
  * id1 = id2 : return 0
  */
-int comparexid(const void *id1, const void *id2)
+int compareXID(const void *id1, const void *id2)
 {
 	int tmpresult;
 	XID **tmp1 = (XID **)id1;
@@ -123,7 +124,7 @@ int comparexid(const void *id1, const void *id2)
  */
 uint32_t XIDtounsigned(XID *bitpat)
 {
-	uint32_t tmp = bitpat->w[16]<<24 | bitpat->w[17]<<16 |
-				bitpat->w[18]<<8 | bitpat->w[19];
+	uint32_t tmp = bitpat->w[16] << 24 | bitpat->w[17] << 16 |
+				bitpat->w[18] << 8 | bitpat->w[19];
 	return tmp;
 }

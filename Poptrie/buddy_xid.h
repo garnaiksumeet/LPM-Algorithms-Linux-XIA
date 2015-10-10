@@ -3,11 +3,11 @@
  * All rights reserved.
  */
 
-#include "poptrie_xia.h"
+#include "poptrie_xid.h"
 #include <stdlib.h>
 
-#ifndef _POPTRIE_BUDDY_H
-#define _POPTRIE_BUDDY_H
+#ifndef _POPTRIE_BUDDY_XID_H
+#define _POPTRIE_BUDDY_XID_H
 
 /*
  * Buddy system
