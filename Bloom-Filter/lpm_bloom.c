@@ -94,13 +94,10 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 			printf("ERROR: Could not create bloom filter\n");
 			return NULL;
 		}
-		tmp_hashmap = hashit_create(filter->length[i], HEXXID, NULL,
-							comparekeys, CHAIN_H);
+		tmp_hashmap = hashit_create(filter->length[i], HEXXID, NULL, comparekeys, CHAIN_H);
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
-			assert(0 ==
-			counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
-			assert(0 ==
-			hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)));
+			assert(0 == counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
+			assert(0 == hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)));
 		}
 		filter->hashtable[i] = tmp_hashmap;
 	}
@@ -115,15 +112,17 @@ unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 	struct bloom_structure *filter = (struct bloom_structure *) bf;
 	unsigned int *nexthop = NULL;
 	// The returned values of counting_bloom_check() are 0 if found else 1
-	unsigned char matchvec[WDIST] = {1};
+	unsigned char matchvec[WDIST] = {0};
 	unsigned char tmp1[HEXXID + 1] = {0};
 	unsigned char tmp2[HEXXID] = {0};
 
 	memcpy(tmp1, id, HEXXID);
-	memcpy(tmp2, tmp2, HEXXID);
+	memcpy(tmp2, tmp1, HEXXID);
+	for (i = 0; i < WDIST; i++)
+		matchvec[i] = 1;
 	// Although the paper suggests to perform parallel membership queries
 	for (i = len; i >= MINLENGTH; i--) {
-		tmp1[i / BYTE] = tmp1[i / BYTE] >> (BYTE - i % BYTE) <<
+		tmp1[i / BYTE] = (tmp1[i / BYTE] >> (BYTE - i % BYTE)) <<
 							(BYTE - i % BYTE);
 		if (!filter->flag[i - MINLENGTH])
 			continue;
@@ -133,15 +132,14 @@ unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 	}
 	// Parse the matchvec from longest to shortest to perform table search
 	for (i = len; i >= MINLENGTH; i--) {
-		tmp2[i / BYTE] = tmp2[i / BYTE] >> (BYTE - i % BYTE) <<
+		tmp2[i / BYTE] = (tmp2[i / BYTE] >> (BYTE - i % BYTE)) <<
 							(BYTE - i % BYTE);
-		if (matchvec[i - MINLENGTH] || !filter->flag[i - MINLENGTH])
+		if (!matchvec[i - MINLENGTH] || !filter->flag[i - MINLENGTH])
 			continue;
 		nexthop = hashit_lookup(filter->hashtable[i - MINLENGTH],
 					tmp2);
 		if (nexthop)
 			return *nexthop;
 	}
-
 	return 0;
 }
