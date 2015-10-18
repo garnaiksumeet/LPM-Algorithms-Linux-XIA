@@ -139,7 +139,7 @@ int isprefix(struct entryrec *s, struct entryrec *t)
 {
 	int tmp = 0;
 	int equal = -1;
-	int length;	//Represents the length of the prefix in the routing entry "s"
+	int length; //Represents the length of the prefix in the routing entry "s"
 	xid s_data, t_data;
 	xid *ps_data = &s_data;
 	xid *pt_data = &t_data;
@@ -200,6 +200,87 @@ static unsigned int *buildnexthoptable(struct entryrec *entry[], int nentries, i
 }
 
 /*
+ * Check if one xid is prefix of another xid?
+ */
+static int check_prefix(xid orig, xid pref, int len)
+{
+	int i, j, neq;
+	xid *tmp = alloca(sizeof(xid));
+	xid *bitmask = alloca(sizeof(xid));
+	memset(bitmask, 0, HEXXID);
+
+	for (i = 0; i <= len / 8; i++)
+		tmp->w[i] = orig.w[i] ^ pref.w[i];
+	tmp->w[i - 1] = (tmp->w[i - 1] >> (8 - len % 8)) << (8 - len % 8);
+	for (j = i; j < 20; j++)
+		tmp->w[j] = 0;
+	neq = comparexid(&bitmask, &tmp);
+	if (!neq)
+		return 1;
+	else
+		return 0;
+}
+
+/*
+ * Checks for existence in prefix tree and add if not present
+ */
+static int in_prefix_tree(struct node_patric *root, struct tmp_prerec *pre,
+			int id, struct baserec **b, struct tmp_prerec **p)
+{
+	struct node_patric *cur_node = root;
+	xid *bitmask = alloca(sizeof(xid));
+	int pos = 0;
+	int pidx, bidx;
+	int tmp;
+
+	pos = cur_node->skip;
+	while (NOBASE == cur_node->base) {
+		*bitmask = extract(pos, 1, pre->str);
+		pos++;
+		if (bitmask->w[HEXXID - 1])
+			cur_node = cur_node->right;
+		else
+			cur_node = cur_node->left;
+		pos += cur_node->skip;
+	}
+
+	bidx = cur_node->base;
+	pidx = b[bidx]->pre;
+	tmp = pidx;
+	if ((NOPRE == pidx) && (1 == check_prefix(b[bidx]->str, pre->str, pre->len))){
+		b[bidx]->pre = id;
+		return 1;
+	}
+	while (1 == check_prefix(p[tmp]->str, pre->str, pre->len)) {
+		pidx = p[pidx]->pre;
+		if (NOPRE == pidx){
+			p[tmp]->pre = id;
+			return 1;
+		} else {
+			tmp = pidx;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Build the prefix tree i.e tree where prefixes in the table are to be searched
+ */
+static int build_prefix_tree(struct tmp_prerec **p, struct baserec **b,
+				int nprefs, struct node_patric *root)
+{
+	// Build the prefix tree
+	int i;
+
+	for (i = nprefs - 1; i > -1; i--) {
+		assert(0 != in_prefix_tree(root, p[i], i, b, p));
+	}
+
+	return 0;
+}
+
+/*
  * This routine builds the entire routing table
  */
 struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
@@ -209,8 +290,8 @@ struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
 	
 	struct baserec **b = NULL;
 	struct baserec *btemp = NULL;
-	struct prerec **p = NULL;
-	struct prerec *ptemp = NULL;
+	struct tmp_prerec **p = NULL;
+	struct tmp_prerec *ptemp = NULL;
 
 	struct baserec *base = NULL;
 	struct prerec *pre = NULL;
@@ -224,35 +305,41 @@ struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
 
 	xidentrysort(entry, nentries, sizeof(struct entryrec *), compareentries);
 	// Remove duplicates
-/*	size = nentries > 0 ? 1 : 0;
+/*	int size = nentries > 0 ? 1 : 0;
 	for (i = 1; i < nentries; i++) {
 		if (compareentries(&entry[i - 1], &entry[i]) != 0)
 			entry[size++] = entry[i];
-	}*/
+	}
+	assert(size == nentries);*/
 
 	// The number of internal nodes in the tree can't be larger
 	// than the number of entries.
 	b = (struct baserec **) malloc(nentries * sizeof(struct baserec *));
-	p = (struct prerec **) malloc(nentries * sizeof(struct prerec *));
+	p = (struct tmp_prerec **) malloc(nentries * sizeof(struct tmp_prerec *));
 
 	//Initialize pre-pointers
 	for (i = 0; i < nentries; i++)
 		entry[i]->pre = NOPRE;
 
+	int k;
 	//Go through the entries and put the prefixes in p
 	//and the rest of the strings in b
 	for (i = 0; i < nentries; i++) {
 		if (i < nentries - 1 && isprefix(entry[i], entry[i + 1])) {
-			ptemp = malloc(sizeof(struct prerec));
+			ptemp = malloc(sizeof(struct tmp_prerec));
+			memcpy(&(ptemp->str), &(entry[i]->data), HEXXID);
 			ptemp->len = entry[i]->len;
 			ptemp->pre = entry[i]->pre;
+			// Buggy code, needed to debug
 			//Update 'pre' for all entries that have this prefix
-			for (j = i + 1; j < nentries && isprefix(entry[i], entry[j]); j++)
+/*			for (j = i + 1; j < nentries && isprefix(entry[i], entry[j]); j++) {
 					entry[j]->pre = nprefs;
+			}*/
 			tmp_val = bsearch(&entry[i]->nexthop, nexthop,
 				nnexthops, sizeof(unsigned int), compare);
 			ptemp->nexthop = *tmp_val;
-			p[nprefs++] = ptemp;
+			p[nprefs] = ptemp;
+			nprefs++;
 		} else {
 			btemp = malloc(sizeof(struct baserec));
 			btemp->len = entry[i]->len;
@@ -261,11 +348,14 @@ struct routtablerec *buildrouttable(struct entryrec *entry[], int nentries)
 			tmp_val = bsearch(&entry[i]->nexthop, nexthop,
 				nnexthops, sizeof(unsigned int), compare);
 			btemp->nexthop = *tmp_val;
-			b[nbases++] = btemp;
+			b[nbases] = btemp;
+			nbases++;
 		}
 	}
 	struct node_patric *root = NULL;
 	root = buildpatricia(b, 0, 0, nbases);
+	// This can be removed after the buggy code in above prefix vector is removed
+	assert(0 == build_prefix_tree(p, b, nprefs, root));
 
 	//At this point we now how much memory to allocate
 	base = malloc(nbases * sizeof(struct baserec));

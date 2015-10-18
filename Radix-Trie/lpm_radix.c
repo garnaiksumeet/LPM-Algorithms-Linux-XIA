@@ -48,7 +48,7 @@ int radix_destroy_fib(struct routtablerec *rtable)
 	return 0;
 }
 
-unsigned int lookup_radix(const xid *id, struct routtablerec *table)
+unsigned int lookup_radix(const xid *id, struct routtablerec *table, int opt)
 {
-	return find(*id, table);
+	return find(*id, table, opt);
 }

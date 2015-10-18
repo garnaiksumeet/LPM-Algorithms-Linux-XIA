@@ -19,7 +19,7 @@
 
 struct routtablerec *radix_create_fib(struct nextcreate *table,
 		unsigned long size);
-unsigned int lookup_radix(const xid *id, struct routtablerec *table);
+unsigned int lookup_radix(const xid *id, struct routtablerec *table, int opt);
 int radix_destroy_fib(struct routtablerec *rtable);
 
 #endif

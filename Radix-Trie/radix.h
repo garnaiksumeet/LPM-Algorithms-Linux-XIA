@@ -17,13 +17,21 @@
 #undef BYTE
 #define BYTE 8
 
-#define ADRSIZE 160       /* the number of bits in an address */
+#define ADRSIZE 160 /* the number of bits in an address */
 
-typedef struct xid { unsigned char w[20]; } xid;
+typedef struct xid {unsigned char w[20];} xid;
 typedef xid *list;
 
 #define NOPRE -1          /* an empty prefix pointer */
 #define NOBASE -1
+
+struct tmp_prerec
+{
+	xid str;
+	int pre;
+	int len;
+	unsigned int nexthop;
+};
 
 /* The routing table entries are initially stored in
    a simple array */
@@ -99,8 +107,6 @@ struct routtablerec *radixtrie_create_fib(struct nextcreate *table,
 
 int radixtrie_destroy_fib(struct routtablerec *rtable);
 
-unsigned int radixtrie_lookup(const xid *id, struct routtablerec *table);
-
 /* 
  * Extract the 32 LSBs and cast to uint32_t
  */
@@ -113,6 +119,6 @@ uint32_t xidtounsigned(xid *bitpat);
 int comparexid(const void *id1, const void *id2);
 
 /* Perform a lookup. */
-unsigned int find(xid s, struct routtablerec *t);
+unsigned int find(xid s, struct routtablerec *t, int opt);
 
 #endif
