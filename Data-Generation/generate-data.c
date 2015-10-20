@@ -207,6 +207,7 @@ static int prefix_dist(struct nextcreate *table, int size, gsl_rng *r)
 
 	for (i = 0; i < size; i++) {
 		memset(table[i].prefix, 0, HEXXID);
+		memset(tmp_prefix, 0, HEXXID);
 		bytes = table[i].len / BYTE;
 		bits = table[i].len % BYTE;
 		for (j = 0; j < bytes; j++)
