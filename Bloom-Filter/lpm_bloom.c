@@ -67,8 +67,8 @@ int bloom_destroy_fib(struct bloom_structure *filter)
 struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate)
 {
-	int i, j;
-	unsigned char xid[HEXXID + 1] = {0};
+	int i, j, k, min_len;
+	unsigned char tmp[HEXXID] = {0};
 	struct nextcreate **tmp_table = NULL;
 	struct bloom_structure *filter = NULL;
 	hash_t tmp_hashmap = NULL;
@@ -96,8 +96,14 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		}
 		tmp_hashmap = hashit_create(filter->length[i], HEXXID, NULL, comparekeys, CHAIN_H);
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
+			memcpy(&tmp, &(tmp_table[j]->prefix), HEXXID);
+			min_len = tmp_table[j]->len / 8;
+			for (k = (min_len + 1); k < 20; k++)
+				tmp_table[j]->prefix[k] = 0;
+			tmp_table[j]->prefix[min_len] = (tmp_table[j]->prefix[min_len] >> (8 - (min_len % 8))) << (8 - (min_len % 8));
 			assert(0 == counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
-			assert(0 == hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)));
+			if (-1 == hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)))
+				printf("Already Inserted\n");
 		}
 		filter->hashtable[i] = tmp_hashmap;
 	}
@@ -108,7 +114,7 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 		void *bf)
 {
-	int i;
+	int i, min_len;
 	struct bloom_structure *filter = (struct bloom_structure *) bf;
 	unsigned int *nexthop = NULL;
 	// The returned values of counting_bloom_check() are 0 if found else 1
@@ -117,11 +123,15 @@ unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 	unsigned char tmp2[HEXXID] = {0};
 
 	memcpy(tmp1, id, HEXXID);
+	min_len = len / 8;
+	for (i = (min_len + 1); i < 20; i++)
+		tmp1[i] = 0;
+	tmp1[min_len] = (tmp1[min_len] >> (8 - (min_len % 8))) << (8 - (min_len % 8));
 	memcpy(tmp2, tmp1, HEXXID);
 	for (i = 0; i < WDIST; i++)
 		matchvec[i] = 1;
 	// Although the paper suggests to perform parallel membership queries
-	for (i = len; i >= MINLENGTH; i--) {
+	for (i = MAXLENGTH; i >= MINLENGTH; i--) {
 		tmp1[i / BYTE] = (tmp1[i / BYTE] >> (BYTE - i % BYTE)) <<
 							(BYTE - i % BYTE);
 		if (!filter->flag[i - MINLENGTH])
@@ -131,7 +141,7 @@ unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 								HEXXID);
 	}
 	// Parse the matchvec from longest to shortest to perform table search
-	for (i = len; i >= MINLENGTH; i--) {
+	for (i = MAXLENGTH; i >= MINLENGTH; i--) {
 		tmp2[i / BYTE] = (tmp2[i / BYTE] >> (BYTE - i % BYTE)) <<
 							(BYTE - i % BYTE);
 		if (!matchvec[i - MINLENGTH] || !filter->flag[i - MINLENGTH])
