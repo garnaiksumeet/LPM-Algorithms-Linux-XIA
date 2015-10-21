@@ -28,7 +28,7 @@
 #define BYTE 8
 // This is simply an observation of the actual tables created although this
 // number is huge considering uniform distribution
-#define DUPS 500
+#define DUPS 5000
 
 /* 
  * This is a structure that consists of one entry in the table generated.

@@ -103,6 +103,22 @@ static int nexthop_dist(struct nextcreate *table, int size, gsl_rng *r,
 	return 0;
 }
 
+static struct nextcreate *lduplicates(struct nextcreate **key,
+				struct nextcreate **base, int num)
+{
+	struct nextcreate *ret = NULL;
+	int i;
+
+	for (i = 0; i < num; i++) {
+		if (0 == sortentries(key, (base + i))) {
+			ret = *(base + i);
+			break;
+		}
+	}
+
+	return ret;
+}
+
 /*
  * This routine is concerned with the replacement of duplicates in the FIBs
  * generated such that all the entries in the FIB are distinct.
@@ -120,34 +136,37 @@ static int remove_duplicates(struct nextcreate **dup_table, int dsize,
 	int i, j;
 	int bytes, bits;
 	int flag;
-	unsigned long int tmp;
 	unsigned char tmp_prefix[HEXXID] = {0};
 	struct nextcreate *match_sorted = NULL;
 	struct nextcreate *match_dup = NULL;
+	struct nextcreate *tmp_entry = malloc(sizeof(struct nextcreate));
 
 	for (i = 0; i < dsize; i++) {
 		flag = TRUE;
 		while (flag) {
-			memset(dup_table[i]->prefix, 0, HEXXID);
+			memset(tmp_prefix, 0, HEXXID);
+			memset(tmp_entry->prefix, 0, HEXXID);
 			bytes = dup_table[i]->len / BYTE;
 			bits = dup_table[i]->len % BYTE;
 			for (j = 0; j < bytes; j++)
 				tmp_prefix[j] = uniform_char(r, 0);
 			tmp_prefix[j] = uniform_char(r, (BYTE - bits));
-			memcpy(dup_table[i]->prefix, tmp_prefix, HEXXID);
-			match_sorted = bsearch(&dup_table[i],
+			memcpy(tmp_entry->prefix, tmp_prefix, HEXXID);
+			tmp_entry->len = dup_table[i]->len;
+			match_sorted = bsearch(&tmp_entry,
 				&sortedtable[0], ssize,
 				sizeof(struct nextcreate *), sortentries);
-			// Performing a linear search is not a very big problem
-			// since the array is actually quite small
-			match_dup = lfind(&dup_table[i], &dup_table[0],
-				(size_t *) &dsize, sizeof(struct nextcreate *),
-				sortentries);
-			if ((NULL == match_sorted) && (NULL == match_dup))
+			match_dup = lduplicates(&tmp_entry, &dup_table[0],
+									dsize);
+			if ((NULL == match_sorted) && (NULL == match_dup)) {
 				flag = FALSE;
+				memcpy(dup_table[i]->prefix,
+					tmp_entry->prefix, HEXXID);
+			}
 		}
 	}
 
+	free(tmp_entry);
 	return 0;
 }
 
@@ -174,18 +193,21 @@ static int deduplication(struct nextcreate *table, int size, gsl_rng *r)
 	qsort(tmp_table, size, sizeof(struct nextcreate *), sortentries);
 	dup_table = malloc(DUPS * sizeof(struct nextcreate *));
 	assert(dup_table);
+	int m = 0;
 	j = 0;
-	k = 0; // Number of distinct entries in table
+	k = 0; // Index of number of distinct entries
 	for (i = 1; i < size; i++) {
 		if ((0 == sortentries(&tmp_table[i - 1], &tmp_table[i])) &&
 				(tmp_table[i-1]->len == tmp_table[i]->len)) {
-			dup_table[j] = tmp_table[i];
-			assert(j++ < DUPS);
+			dup_table[j] = tmp_table[i - 1];
+			assert(++j < DUPS);
 		} else {
-			tmp_table[k++] = tmp_table[i];
+			tmp_table[k] = tmp_table[i - 1];
+			k++;
 		}
 	}
 	remove_duplicates(dup_table, j, tmp_table, k, r);
+
 	free(tmp_table);
 	free(dup_table);
 }
