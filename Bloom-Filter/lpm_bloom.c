@@ -8,6 +8,24 @@ static int comparekeys(void *key1, void *key2)
 	return memcmp(k1, k2, HEXXID);
 }
 
+static int sortentries(const void *e1, const void *e2)
+{
+	int res;
+	struct nextcreate **entry1 = (struct nextcreate **) e1;
+	struct nextcreate **entry2 = (struct nextcreate **) e2;
+	unsigned char *pre1 = (*entry1)->prefix;
+	unsigned char *pre2 = (*entry2)->prefix;
+
+	res = memcmp(pre1, pre2, 20);
+
+	if (res < 0)
+		return -1;
+	else if (res > 0)
+		return 1;
+	else
+		return 0;
+}
+
 static int sortbylength(const void *e1, const void *e2)
 {
 	int res;
@@ -67,9 +85,10 @@ int bloom_destroy_fib(struct bloom_structure *filter)
 struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		unsigned long size, double error_rate)
 {
-	int i, j, k, min_len;
+	int i, j, k, m, *next = alloca(sizeof(int));
 	unsigned char tmp[HEXXID] = {0};
 	struct nextcreate **tmp_table = NULL;
+	struct nextcreate **dup_table = NULL;
 	struct bloom_structure *filter = NULL;
 	hash_t tmp_hashmap = NULL;
 
@@ -79,13 +98,14 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 	memset(filter->high, -1, WDIST * sizeof(int));
 
 	tmp_table = malloc(size * sizeof(struct nextcreate *));
+	dup_table = malloc(DUPS * sizeof(struct nextcreate *));
 	assert(tmp_table);
 	for (i = 0; i < size; i++)
 		tmp_table[i] = &table[i];
 
 	qsort(tmp_table, size, sizeof(struct nextcreate *), sortbylength);
 	bloom_proportion(filter, tmp_table, size);
-	
+
 	for (i = 0; i < WDIST; i++) {
 		if (!filter->flag[i])
 			continue;
@@ -97,13 +117,22 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		tmp_hashmap = hashit_create(filter->length[i], HEXXID, NULL, comparekeys, CHAIN_H);
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
 			memcpy(&tmp, &(tmp_table[j]->prefix), HEXXID);
-			min_len = tmp_table[j]->len / 8;
-			for (k = (min_len + 1); k < 20; k++)
-				tmp_table[j]->prefix[k] = 0;
-			tmp_table[j]->prefix[min_len] = (tmp_table[j]->prefix[min_len] >> (8 - (min_len % 8))) << (8 - (min_len % 8));
 			assert(0 == counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
-			if (-1 == hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)))
-				printf("Already Inserted\n");
+			if (0 != hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop))) {
+				FILE *fp = fopen("err.txt", "a");
+				for (k = filter->low[i]; k <= filter->high[i]; k++) {
+					for (m = 0; m < 20; m++)
+						fprintf(fp, "%02x", tmp_table[k]->prefix[m]);
+					fprintf(fp, "\tLen: %d\tNexthop: %d\n", tmp_table[k]->len, tmp_table[k]->nexthop);
+				}
+				fclose(fp);
+				for (m = 0; m < 20; m++)
+					printf("%02x", tmp_table[j]->prefix[m]);
+				printf("\tLen: %d\tNexthop: %d\n", tmp_table[j]->len, tmp_table[j]->nexthop);
+				next = hashit_lookup(tmp_hashmap, tmp_table[j]->prefix);
+				printf("Error: %d\n", *next);
+				*next = getchar();
+			}
 		}
 		filter->hashtable[i] = tmp_hashmap;
 	}
@@ -123,10 +152,6 @@ unsigned int lookup_bloom(unsigned char (*id)[HEXXID], unsigned int len,
 	unsigned char tmp2[HEXXID] = {0};
 
 	memcpy(tmp1, id, HEXXID);
-	min_len = len / 8;
-	for (i = (min_len + 1); i < 20; i++)
-		tmp1[i] = 0;
-	tmp1[min_len] = (tmp1[min_len] >> (8 - (min_len % 8))) << (8 - (min_len % 8));
 	memcpy(tmp2, tmp1, HEXXID);
 	for (i = 0; i < WDIST; i++)
 		matchvec[i] = 1;

@@ -137,7 +137,7 @@ static int remove_duplicates(struct nextcreate **dup_table, int dsize,
 	int bytes, bits;
 	int flag;
 	unsigned char tmp_prefix[HEXXID] = {0};
-	struct nextcreate *match_sorted = NULL;
+	struct nextcreate **match_sorted = NULL;
 	struct nextcreate *match_dup = NULL;
 	struct nextcreate *tmp_entry = malloc(sizeof(struct nextcreate));
 
@@ -193,12 +193,10 @@ static int deduplication(struct nextcreate *table, int size, gsl_rng *r)
 	qsort(tmp_table, size, sizeof(struct nextcreate *), sortentries);
 	dup_table = malloc(DUPS * sizeof(struct nextcreate *));
 	assert(dup_table);
-	int m = 0;
 	j = 0;
 	k = 0; // Index of number of distinct entries
 	for (i = 1; i < size; i++) {
-		if ((0 == sortentries(&tmp_table[i - 1], &tmp_table[i])) &&
-				(tmp_table[i-1]->len == tmp_table[i]->len)) {
+		if (0 == sortentries(&tmp_table[i - 1], &tmp_table[i])) {
 			dup_table[j] = tmp_table[i - 1];
 			assert(++j < DUPS);
 		} else {
