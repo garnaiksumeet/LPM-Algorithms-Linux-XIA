@@ -8,24 +8,6 @@ static int comparekeys(void *key1, void *key2)
 	return memcmp(k1, k2, HEXXID);
 }
 
-static int sortentries(const void *e1, const void *e2)
-{
-	int res;
-	struct nextcreate **entry1 = (struct nextcreate **) e1;
-	struct nextcreate **entry2 = (struct nextcreate **) e2;
-	unsigned char *pre1 = (*entry1)->prefix;
-	unsigned char *pre2 = (*entry2)->prefix;
-
-	res = memcmp(pre1, pre2, 20);
-
-	if (res < 0)
-		return -1;
-	else if (res > 0)
-		return 1;
-	else
-		return 0;
-}
-
 static int sortbylength(const void *e1, const void *e2)
 {
 	int res;
@@ -118,21 +100,7 @@ struct bloom_structure *bloom_create_fib(struct nextcreate *table,
 		for (j = filter->low[i]; j <= filter->high[i]; j++) {
 			memcpy(&tmp, &(tmp_table[j]->prefix), HEXXID);
 			assert(0 == counting_bloom_add(filter->bloom[i], tmp_table[j]->prefix, HEXXID));
-			if (0 != hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop))) {
-				FILE *fp = fopen("err.txt", "a");
-				for (k = filter->low[i]; k <= filter->high[i]; k++) {
-					for (m = 0; m < 20; m++)
-						fprintf(fp, "%02x", tmp_table[k]->prefix[m]);
-					fprintf(fp, "\tLen: %d\tNexthop: %d\n", tmp_table[k]->len, tmp_table[k]->nexthop);
-				}
-				fclose(fp);
-				for (m = 0; m < 20; m++)
-					printf("%02x", tmp_table[j]->prefix[m]);
-				printf("\tLen: %d\tNexthop: %d\n", tmp_table[j]->len, tmp_table[j]->nexthop);
-				next = hashit_lookup(tmp_hashmap, tmp_table[j]->prefix);
-				printf("Error: %d\n", *next);
-				*next = getchar();
-			}
+			assert(0 == hashit_insert(tmp_hashmap, tmp_table[j]->prefix, &(tmp_table[j]->nexthop)));
 		}
 		filter->hashtable[i] = tmp_hashmap;
 	}
