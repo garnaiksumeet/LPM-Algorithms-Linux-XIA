@@ -26,11 +26,12 @@ static int sortentries(const void *e1, const void *e2)
 }
 
 static int correctness_experiment(int exp, uint32_t *seeds, int low,
-		int seedsize, double alpha)
+							int seedsize)
 {
 	int i;
 	unsigned long size = 1 << exp;
 	struct nextcreate *table = NULL;
+	struct nextcreate *tmp_table = NULL;
 	int nnexthops = 16;
 	unsigned int len;
 	int nexthops[3] = {0};
@@ -38,22 +39,25 @@ static int correctness_experiment(int exp, uint32_t *seeds, int low,
 	unsigned char (*id2)[HEXXID] = calloc(HEXXID, sizeof(unsigned char));
 
 	table = malloc(sizeof(struct nextcreate) * size);
+	tmp_table = malloc(sizeof(struct nextcreate) * size);
 	assert(0 == table_dist(exp, seeds, low, table, seedsize, nnexthops));
+	memcpy(tmp_table, table, sizeof(struct nextcreate) * size);
 	// Create bloom
-	struct bloom_structure *filter = bloom_create_fib(table, size, alpha);
+	struct bloom_structure *filter = bloom_create_fib(table, size, BLOOMERRORRATE);
 	// Create radix
 	// Radix changes original data hence at the end
 	struct routtablerec *fib = radix_create_fib(table, size);
 	for (i = 0; i < size; i++) {
-		memcpy(id1, table[i].prefix, HEXXID);
-		memcpy(id2, table[i].prefix, HEXXID);
-		len = table[i].len;
-		nexthops[0] = table[i].nexthop;
+		memcpy(id1, tmp_table[i].prefix, HEXXID);
+		memcpy(id2, tmp_table[i].prefix, HEXXID);
+		len = tmp_table[i].len;
+		nexthops[0] = tmp_table[i].nexthop;
 		nexthops[1] = lookup_radix(id1, fib, 0);	// radix lookup
 		nexthops[2] = lookup_bloom(&id2[0], len, filter);// bloom lookup
 		assert((nexthops[0] == nexthops[1]) && (nexthops[1] == nexthops[2]));
 	}
 	free(id2);
+	free(tmp_table);
 	free(table);
 
 	return 0;
@@ -67,7 +71,6 @@ int main(int argc, char *argv[])
 	uint32_t *seeds = NULL;
 	int seedsize = 0;
 	int low = 0;
-	double alpha = 0.0;
 	int val;
 
 	assert(0 == access(SEEDFILE, R_OK | F_OK));
@@ -83,9 +86,7 @@ int main(int argc, char *argv[])
 	for (i = LEXPFIB; i <= HEXPFIB; i++) {
 		size = 1 << i;
 		// This is taken as a constant for the number of 
-		alpha = 1.0;
-		assert(0 == correctness_experiment(i, seeds, low, seedsize,
-						alpha));
+		assert(0 == correctness_experiment(i, seeds, low, seedsize));
 		printf("Done 2^%d\n", i);
 		low = low + NEXTSEED;
 		assert(low < seedsize);
