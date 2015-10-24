@@ -53,6 +53,8 @@ static int evaluate_nexthops_radix(const void *t, const void *ts,
 	struct timespec start, stop;
 	struct nextcreate *table = (struct nextcreate *) t;
 	unsigned long *size = (unsigned long *) ts;
+	struct nextcreate *tmp_table = malloc(sizeof(struct nextcreate) * *size);
+	memcpy(tmp_table, table, sizeof(struct nextcreate) * *size);
 	uint32_t *seed = (uint32_t *) s;
 	int *nnexthops = (int *) nh;
 	double *alpha = (double *) al;
@@ -69,10 +71,10 @@ static int evaluate_nexthops_radix(const void *t, const void *ts,
 	struct routtablerec *fib = radix_create_fib(table, *size);
 	for (i = 0; i < NLOOKUPS; i++) {
 		tmp = sampleindex(&zcache);
-		id = (xid *) &(table[tmp].prefix);
+		id = (xid *) &(tmp_table[tmp].prefix);
 		// Sample from table and set the XID in appropriate form
 		time_measure(&start);
-		lookup_radix(id, fib);
+		lookup_radix(id, fib, 0);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
@@ -81,6 +83,7 @@ static int evaluate_nexthops_radix(const void *t, const void *ts,
 	fprintf(fp, "%d\t%lu\n", *nnexthops, accum);
 	fclose(fp);
 	radix_destroy_fib(fib);
+	free(tmp_table);
 	return 0;
 }
 
@@ -137,7 +140,7 @@ static int nexthops_experiments(int exp, uint32_t *seeds, int low,
 	int (*experiments[])(const void *, const void *, const void *,
 					const void *, const void *) = {
 		evaluate_nexthops_bloom,
-//		evaluate_nexthops_radix,
+		evaluate_nexthops_radix,
 		NULL,
 	};
 
@@ -176,6 +179,8 @@ static int evaluate_lookups_radix(const void *t, const void *ts,
 	struct timespec start, stop;
 	struct nextcreate *table = (struct nextcreate *) t;
 	unsigned long *size = (unsigned long *) ts;
+	struct nextcreate *tmp_table = malloc(sizeof(struct nextcreate) * *size);
+	memcpy(tmp_table, table, sizeof(struct nextcreate) * *size);
 	uint32_t *seed = (uint32_t *) s;
 	double *alpha = (double *) al;
 	FILE *fp = NULL;
@@ -184,17 +189,18 @@ static int evaluate_lookups_radix(const void *t, const void *ts,
 	int i;
 	xid *id = NULL;
 	struct zipf_cache zcache;
+	int wrong = 0;
 
 	init_zipf_cache(&zcache, *size * 30, *alpha, *size, seed, SEED_UINT32_N);
 	setpriority(PRIO_PROCESS, 0, -20);
 	// Create the data structure
 	struct routtablerec *fib = radix_create_fib(table, *size);
 	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = sampleindex(&zcache);
-		id = (xid *) &(table[tmp].prefix);
+		tmp = sampleindex(&zcache) % *size;
+		id = (xid *) &(tmp_table[tmp].prefix);
 		// Sample from table and set the XID in appropriate form
 		time_measure(&start);
-		lookup_radix(id, fib);
+		lookup_radix(id, fib, 0);
 		time_measure(&stop);
 		accum += gettime(&start, &stop);
 	}
@@ -203,33 +209,7 @@ static int evaluate_lookups_radix(const void *t, const void *ts,
 	fprintf(fp, "%lu\t%lu\n", *size, accum);
 	fclose(fp);
 	radix_destroy_fib(fib);
-	return 0;
-}
-
-static int evaluate_lookups_lctrie(const void *t, const void *ts,
-		const void *s, const void *al)
-{
-	struct timespec start, stop;
-	struct nextcreate *table = (struct nextcreate *) t;
-	unsigned long *size = (unsigned long *) ts;
-	uint32_t *seed = (uint32_t *) s;
-	double *alpha = (double *) al;
-	unsigned long tmp;
-	unsigned long accum = 0;
-	int i;
-	struct zipf_cache zcache;
-
-	init_zipf_cache(&zcache, *size * 30, *alpha, *size, seed, SEED_UINT32_N);
-	// Create the data structure
-	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = sampleindex(&zcache);
-		// Sample from table and set the XID in appropriate form
-		time_measure(&start);
-		// Perform lookup
-		time_measure(&stop);
-		accum += gettime(&start, &stop);
-	}
-	end_zipf_cache(&zcache);
+	free(tmp_table);
 	return 0;
 }
 
@@ -249,13 +229,14 @@ static int evaluate_lookups_bloom(const void *t, const void *ts,
 	unsigned int len;
 	unsigned long accum = 0;
 	struct zipf_cache zcache;
+	int wrong = 0;
 
 	init_zipf_cache(&zcache, *size * 30, *alpha, *size, seed, SEED_UINT32_N);
 	setpriority(PRIO_PROCESS, 0, -20);
 	// Create the data structure
 	struct bloom_structure *filter = bloom_create_fib(table, *size, error_rate);
 	for (i = 0; i < NLOOKUPS; i++) {
-		tmp = sampleindex(&zcache);
+		tmp = sampleindex(&zcache) % *size;
 		memcpy(id, table[tmp].prefix, HEXXID);
 		len = table[tmp].len;
 		time_measure(&start);
@@ -283,7 +264,6 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 	int (*experiments[])(const void *, const void *, const void *,
 						const void *) = {
 		evaluate_lookups_bloom,
-		evaluate_lookups_lctrie,
 		evaluate_lookups_radix,
 		NULL,
 	};
@@ -343,9 +323,8 @@ int main(int argc, char *argv[])
 		alpha = 1.0;
 		assert(0 == lookup_experiments(i, seeds, low, seedsize,
 					nnexthops, alpha));
-/*		if (HEXPFIB == i)
-			assert(0 ==
-			nexthops_experiments(i, seeds, low, seedsize, alpha));*/
+		assert(0 ==
+			nexthops_experiments(i, seeds, low, seedsize, alpha));
 		
 		low = low + LOOPSEED;
 		assert(low < seedsize);
