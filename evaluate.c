@@ -7,7 +7,6 @@
 #include <sys/resource.h>
 #include "rdist.h"
 
-#define SEED_UINT32_N 10
 #define LEXPFIB 4
 #define HEXPFIB 20
 #define NLOOKUPS 1000000
@@ -154,8 +153,7 @@ static int nexthops_experiments(int exp, uint32_t *seeds, int low,
 				if (0 == id) {
 					table = malloc(sizeof(struct nextcreate)
 							* size);
-					assert(0 ==
-					table_dist(exp, seeds, low, table, seedsize, nnexthops));
+					assert(0 == table_dist(exp, seeds, low, table, seedsize, nnexthops, alpha));
 					low = low + NEXTSEED;
 					assert(low < seedsize);
 					assert(0 == (experiments[i])
@@ -166,6 +164,10 @@ static int nexthops_experiments(int exp, uint32_t *seeds, int low,
 					assert(wait(NULL) >= 0);
 					low = low + NEXTSEED + SEED_UINT32_N;
 					assert(low < seedsize);
+					if (0 == i)
+						printf("Done lookup experiments bloom 2^%d with nexthops: %d run: %d\n", exp, j, k);
+					else
+						printf("Done lookup experiments radix 2^%d with nexthops: %d run: %d\n", exp, j, k);
 				}
 			}
 		}
@@ -276,8 +278,7 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 			if (0 == id) {
 				table = malloc(sizeof(struct nextcreate) *
 						size);
-				assert(0 == table_dist(exp, seeds, low, table,
-							seedsize, nnexthops));
+				assert(0 == table_dist(exp, seeds, low, table, seedsize, nnexthops, alpha));
 				low = low + NEXTSEED;
 				assert(low < seedsize);
 				assert(0 == (experiments[i])
@@ -288,6 +289,10 @@ static int lookup_experiments(int exp, uint32_t *seeds, int low, int seedsize,
 				assert(wait(NULL) >= 0);
 				low = low + NEXTSEED + SEED_UINT32_N;
 				assert(low < seedsize);
+				if (0 == i)
+					printf("Done lookup experiments bloom 2^%d with run: %d\n", exp, j);
+				else
+					printf("Done lookup experiments radix 2^%d with run: %d\n", exp, j);
 			}
 		}
 	}
@@ -323,9 +328,10 @@ int main(int argc, char *argv[])
 		alpha = 1.0;
 		assert(0 == lookup_experiments(i, seeds, low, seedsize,
 					nnexthops, alpha));
+		printf("Done lookup experiment 2^%d\n", i);
 		assert(0 ==
 			nexthops_experiments(i, seeds, low, seedsize, alpha));
-		
+		printf("Done nexthop experiment 2^%d\n", i);
 		low = low + LOOPSEED;
 		assert(low < seedsize);
 	}

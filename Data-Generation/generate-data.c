@@ -248,15 +248,21 @@ static int prefix_dist(struct nextcreate *table, int size, gsl_rng *r)
  * size: number of entries in the table
  * r: random number generator
  */
-static int prelength_dist(struct nextcreate *table, int size, gsl_rng *r)
+static int prelength_dist(struct nextcreate *table, int size, uint32_t *seeds,
+						int low, double alpha)
 {
 	int i;
 	unsigned long int tmp;
+	struct zipf_cache zcache;
 
+	init_zipf_cache(&zcache, MAXRAND * 1000, alpha, MAXRAND,
+					(seeds + low), SEED_UINT32_N);
 	for (i = 0; i < size; i++) {
-		tmp = gsl_rng_uniform_int(r, MAXRAND) + OFFSET;
+		tmp = sample_zipf_cache(&zcache) + OFFSET;
+		assert((tmp >= 20) && (tmp <= 159));
 		table[i].len = (unsigned int) tmp;
 	}
+	end_zipf_cache(&zcache);
 
 	return 0;
 }
@@ -275,24 +281,26 @@ static int prelength_dist(struct nextcreate *table, int size, gsl_rng *r)
  * nnexthops: number of unique nexthops in the FIB
  */
 int table_dist(int tablexp, uint32_t *seeds, int low, struct nextcreate *table,
-		int size_seeds, int nnexthops)
+		int size_seeds, int nnexthops, double alpha)
 {
 	int i;
 	int size;
-	gsl_rng *r[3];
+	int tmp_low = low;
+	gsl_rng *r[2];
 
-	for (i = 0; i < 3; i++) {
+	low = low + SEED_UINT32_N;
+	for (i = 0; i < 2; i++) {
 		r[i] = gsl_rng_alloc(gsl_rng_ranlux);
-		assert((low + 3) <= size_seeds);
+		assert((low + 2) <= size_seeds);
 		gsl_rng_set(r[i], seeds[low + i]);
 	}
 	size = 1 << tablexp;
-	prelength_dist(table, size, r[0]);
-	prefix_dist(table, size, r[1]);
-	deduplication(table, size, r[1]);
-	nexthop_dist(table, size, r[2], nnexthops);
+	prelength_dist(table, size, seeds, tmp_low, alpha);
+	prefix_dist(table, size, r[0]);
+	deduplication(table, size, r[0]);
+	nexthop_dist(table, size, r[1], nnexthops);
 
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < 2; i++)
 		gsl_rng_free(r[i]);
 
 	return 0;

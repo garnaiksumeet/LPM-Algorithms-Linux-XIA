@@ -40,7 +40,7 @@ static int correctness_experiment(int exp, uint32_t *seeds, int low,
 
 	table = malloc(sizeof(struct nextcreate) * size);
 	tmp_table = malloc(sizeof(struct nextcreate) * size);
-	assert(0 == table_dist(exp, seeds, low, table, seedsize, nnexthops));
+	assert(0 == table_dist(exp, seeds, low, table, seedsize, nnexthops, 1.0));
 	memcpy(tmp_table, table, sizeof(struct nextcreate) * size);
 	// Create bloom
 	struct bloom_structure *filter = bloom_create_fib(table, size, BLOOMERRORRATE);

@@ -10,6 +10,7 @@
 #include <search.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include "../rdist.h"
 
 #undef TRUE
 #define TRUE 1
@@ -17,9 +18,10 @@
 #undef FALSE
 #define FALSE 0
 
-#define NEXTSEED 3
+#define SEED_UINT32_N 10
+#define NEXTSEED ((SEED_UINT32_N) + 2)
 #define MAXFILENAME 10 // Maximum lenght of file name
-#define OFFSET 20 // Offset for the random length generated
+#define OFFSET 19 // Offset for the random length generated
 #define MAXRAND 140 // Bound for random length generation
 #define HEXXID 20 // The number of chars that comprise of a prefix
 #define SEEDS 150000 // Size of array containing seeds
@@ -28,7 +30,7 @@
 #define BYTE 8
 // This is simply an observation of the actual tables created although this
 // number is huge considering uniform distribution
-#define DUPS 5000
+#define DUPS 500000
 
 /* 
  * This is a structure that consists of one entry in the table generated.
@@ -42,7 +44,7 @@ struct nextcreate {
 };
 
 int table_dist(int tablexp, uint32_t *seeds, int low, struct nextcreate *table,
-		int size_seeds, int nnexthops);
+		int size_seeds, int nnexthops, double alpha);
 int print_table(struct nextcreate *table, int size, int prexp);
 
 #endif
